@@ -59,6 +59,8 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/mediaharvester?sslmode=disable
     command: ["./migrate"]
     restart: "no"
+    networks:
+      - internal
 
   bot:
     build:

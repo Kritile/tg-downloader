@@ -40,7 +40,7 @@ func NewAdminServer(
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
 	})
-	engine.LoadHTMLGlob("admin/templates/*.html")
+	engine.LoadHTMLGlob("/app/admin/templates/*.html")
 
 	server := &AdminServer{
 		engine:       engine,
