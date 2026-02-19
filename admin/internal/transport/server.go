@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -18,6 +19,8 @@ type AdminServer struct {
 	userMgmtSvc  domain.AdminUserManagementService
 	statsSvc     domain.AdminStatsService
 	settingsRepo domain.SettingsRepository
+	baseTemplate *template.Template
+	funcMap      template.FuncMap
 }
 
 func NewAdminServer(
@@ -35,12 +38,14 @@ func NewAdminServer(
 	store := cookie.NewStore([]byte(sessionSecret))
 	engine.Use(sessions.Sessions("session", store))
 
-	// Setup template
-	engine.SetFuncMap(template.FuncMap{
+	// Setup template functions
+	funcMap := template.FuncMap{
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
-	})
-	engine.LoadHTMLGlob("/app/admin/templates/*.html")
+	}
+
+	// Load base template
+	baseTemplate := template.Must(template.New("base.html").Funcs(funcMap).ParseFiles("/app/admin/templates/base.html"))
 
 	server := &AdminServer{
 		engine:       engine,
@@ -48,11 +53,52 @@ func NewAdminServer(
 		userMgmtSvc:  userMgmtSvc,
 		statsSvc:     statsSvc,
 		settingsRepo: settingsRepo,
+		baseTemplate: baseTemplate,
+		funcMap:      funcMap,
 	}
 
 	server.setupRoutes()
 
 	return server
+}
+
+// renderPage renders a content template within the base layout
+func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H) {
+	// Load and render the content template
+	contentTemplate, err := template.New(templateName).Funcs(s.funcMap).ParseFiles("/app/admin/templates/" + templateName)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Template error: %v", err)
+		return
+	}
+
+	// Render content to buffer
+	var contentBuf bytes.Buffer
+	if err := contentTemplate.ExecuteTemplate(&contentBuf, "content", data); err != nil {
+		c.String(http.StatusInternalServerError, "Template execution error: %v", err)
+		return
+	}
+
+	// Set title based on template
+	title := "Admin"
+	switch templateName {
+	case "dashboard.html":
+		title = "Dashboard"
+	case "users.html":
+		title = "Users"
+	case "settings.html":
+		title = "Settings"
+	case "stats.html":
+		title = "Statistics"
+	}
+	data["title"] = title
+
+	// Add content to data
+	data["content"] = contentBuf.String()
+
+	// Execute base template
+	if err := s.baseTemplate.Execute(c.Writer, data); err != nil {
+		c.String(http.StatusInternalServerError, "Base template error: %v", err)
+	}
 }
 
 func (s *AdminServer) setupRoutes() {
@@ -136,7 +182,7 @@ func (s *AdminServer) handleDashboard(c *gin.Context) {
 	month, _ := s.statsSvc.GetDownloadsThisMonth(ctx)
 	totalUsers, _ := s.statsSvc.GetTotalUsers(ctx)
 
-	c.HTML(http.StatusOK, "dashboard.html", gin.H{
+	s.renderPage(c, "dashboard.html", gin.H{
 		"downloads_today":    today,
 		"downloads_month":    month,
 		"total_users":        totalUsers,
@@ -168,7 +214,7 @@ func (s *AdminServer) handleUsers(c *gin.Context) {
 		users = []*models.User{}
 	}
 
-	c.HTML(http.StatusOK, "users.html", gin.H{
+	s.renderPage(c, "users.html", gin.H{
 		"users":        users,
 		"query":        query,
 		"current_page": "users",
@@ -197,7 +243,7 @@ func (s *AdminServer) handleSettings(c *gin.Context) {
 		settings = &models.Settings{}
 	}
 
-	c.HTML(http.StatusOK, "settings.html", gin.H{
+	s.renderPage(c, "settings.html", gin.H{
 		"settings":     settings,
 		"current_page": "settings",
 		"success":      c.Query("success"),
@@ -239,7 +285,7 @@ func (s *AdminServer) handleStats(c *gin.Context) {
 	month, _ := s.statsSvc.GetDownloadsThisMonth(ctx)
 	topUsers, topCounts, _ := s.statsSvc.GetTopUsers(ctx, 10)
 
-	c.HTML(http.StatusOK, "stats.html", gin.H{
+	s.renderPage(c, "stats.html", gin.H{
 		"downloads_today":  today,
 		"downloads_month":  month,
 		"top_users":        topUsers,
