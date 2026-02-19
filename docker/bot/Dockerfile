@@ -6,10 +6,16 @@ RUN apt-get update && apt-get install -y \
     curl \
     python3-pip \
     python3-venv \
+    libcurl4-openssl-dev \
+    libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install latest yt-dlp via pip with impersonation support (curl-cffi)
-RUN pip3 install --break-system-packages -U yt-dlp curl-cffi
+# curl-cffi provides browser impersonation for sites like TikTok
+RUN pip3 install --break-system-packages --no-cache-dir -U yt-dlp curl-cffi
+
+# Verify curl-cffi is installed correctly
+RUN python3 -c "from curl_cffi import requests; print('curl-cffi installed successfully')"
 
 WORKDIR /app
 

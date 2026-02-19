@@ -38,17 +38,26 @@ func (s *downloaderService) Download(ctx context.Context, url string, destPath s
 	// Generate output template
 	outputTemplate := filepath.Join(s.downloadPath, destPath, "%(id)s.%(ext)s")
 
+	// Check if it's a TikTok URL
+	isTikTok := strings.Contains(url, "tiktok.com") || strings.Contains(url, "vt.tiktok.com") || strings.Contains(url, "vm.tiktok.com")
+
 	// Build yt-dlp command with TikTok-specific options
-	args := []string{
-		"--format", "best[height<=720]/best", // Allow fallback to any best format
-		"--output", outputTemplate,
-		"--no-playlist", // Don't download playlists
-		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-	}
-	
-	// Add TikTok-specific impersonation if it's a TikTok URL
-	if strings.Contains(url, "tiktok.com") {
-		args = append(args, "--extractor-args", "tiktok:api=api")
+	var args []string
+	if isTikTok {
+		// TikTok needs more flexible format selection and impersonation
+		args = []string{
+			"--format", "best", // Use best available format for TikTok
+			"--output", outputTemplate,
+			"--no-playlist", // Don't download playlists
+			"--impersonate", "chrome:120", // Use Chrome 120 impersonation via curl-cffi
+		}
+	} else {
+		// YouTube and other sites
+		args = []string{
+			"--format", "best[height<=720]/best", // Limit quality to reduce file size
+			"--output", outputTemplate,
+			"--no-playlist", // Don't download playlists
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
