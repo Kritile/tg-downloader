@@ -47,12 +47,12 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 	// Add proxy for YouTube and TikTok
 	useProxy := source == models.SourceYoutube || source == models.SourceTiktok
 	if useProxy && s.proxyAddr != "" {
-		args = append(args, "--proxy", "socks5://"+s.proxyAddr)
+		args = append(args, "--proxy", "socks5h://"+s.proxyAddr)
 	}
 
 	// Add TikTok-specific options
 	if source == models.SourceTiktok {
-		args = append(args, "--impersonate", "chrome:120")
+		args = append(args, "--impersonate", "chrome:119")
 	}
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)

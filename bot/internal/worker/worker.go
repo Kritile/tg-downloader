@@ -194,7 +194,7 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProx
 
 	// Add proxy for YouTube and TikTok
 	if useProxy && wp.proxyAddr != "" {
-		args = append(args, "--proxy", "socks5://"+wp.proxyAddr)
+		args = append(args, "--proxy", "socks5h://"+wp.proxyAddr)
 	}
 
 	// Add format selection
@@ -204,8 +204,9 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProx
 		// Default format selection
 		if isTikTok {
 			// TikTok needs more flexible format selection
+			// Use available impersonation target
 			args = append(args, "--format", "best")
-			args = append(args, "--impersonate", "chrome:120")
+			args = append(args, "--impersonate", "chrome:119")
 		} else {
 			// YouTube and others - prefer 720p or lower to stay under Telegram limit
 			args = append(args, "--format", "best[height<=720]/best")
