@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	maxRetries    = 2
-	downloadPath  = "/tmp/downloads"
+	maxRetries   = 2
+	downloadPath = "/tmp/downloads"
 )
 
 type WorkerPool struct {
@@ -24,6 +24,7 @@ type WorkerPool struct {
 	bot            domain.Notifier
 	workerCount    int
 	downloadRepo   domain.DownloadRepository
+	proxyAddr      string
 }
 
 func NewWorkerPool(
@@ -31,12 +32,14 @@ func NewWorkerPool(
 	bot domain.Notifier,
 	workerCount int,
 	downloadRepo domain.DownloadRepository,
+	proxyAddr string,
 ) *WorkerPool {
 	return &WorkerPool{
 		queueService:   queueService,
 		bot:            bot,
 		workerCount:    workerCount,
 		downloadRepo:   downloadRepo,
+		proxyAddr:      proxyAddr,
 	}
 }
 
@@ -132,13 +135,12 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	// Generate output template
 	outputTemplate := filepath.Join(fullPath, "%(id)s.%(ext)s")
 
+	// Determine if we need to use proxy (YouTube)
+	isYouTube := job.Source == string(models.SourceYoutube)
+	isTikTok := job.Source == string(models.SourceTiktok)
+
 	// Build yt-dlp command
-	args := []string{
-		"--format", "best[height<=720]", // Limit quality to reduce file size
-		"--output", outputTemplate,
-		"--no-playlist", // Don't download playlists
-		job.URL,
-	}
+	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, isYouTube, isTikTok)
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
@@ -168,7 +170,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	}
 
 	// Log successful download
-	wp.logSuccessfulDownload(job.UserID, models.VideoSource(job.Source), job.URL, fileInfo.Size())
+	wp.logSuccessfulDownload(job.UserID, models.VideoSource(job.Source), job.URL, job.Format, fileInfo.Size())
 
 	// Send video to user
 	err = wp.bot.SendVideo(job.ChatID, filePath)
@@ -180,6 +182,37 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 
 	// File is already deleted by SendVideo
 	return nil
+}
+
+// buildYtDlpArgs builds yt-dlp command arguments
+func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, isYouTube, isTikTok bool) []string {
+	args := []string{
+		"--no-playlist", // Don't download playlists
+		"--output", outputTemplate,
+	}
+
+	// Add proxy for YouTube
+	if isYouTube && wp.proxyAddr != "" {
+		args = append(args, "--proxy", "socks5://"+wp.proxyAddr)
+	}
+
+	// Add format selection
+	if format != "" {
+		args = append(args, "--format", format)
+	} else {
+		// Default format selection
+		if isTikTok {
+			// TikTok needs more flexible format selection
+			args = append(args, "--format", "best")
+			args = append(args, "--impersonate", "chrome:120")
+		} else {
+			// YouTube and others - prefer 720p or lower to stay under Telegram limit
+			args = append(args, "--format", "best[height<=720]/best")
+		}
+	}
+
+	args = append(args, url)
+	return args
 }
 
 func (wp *WorkerPool) findDownloadedFile(dir string) (string, error) {
@@ -207,11 +240,12 @@ func (wp *WorkerPool) findDownloadedFile(dir string) (string, error) {
 	return "", fmt.Errorf("no video file found in download directory")
 }
 
-func (wp *WorkerPool) logSuccessfulDownload(userID int64, source models.VideoSource, videoURL string, fileSize int64) {
+func (wp *WorkerPool) logSuccessfulDownload(userID int64, source models.VideoSource, videoURL string, format string, fileSize int64) {
 	download := &models.Download{
 		UserID:   userID,
 		Source:   string(source),
 		VideoURL: videoURL,
+		Format:   format,
 		FileSize: &fileSize,
 		Status:   string(models.StatusCompleted),
 	}

@@ -19,6 +19,7 @@ type Download struct {
 	UserID    int64     `json:"user_id"`
 	Source    string    `json:"source"`
 	VideoURL  string    `json:"video_url"`
+	Format    string    `json:"format"`
 	FileSize  *int64    `json:"file_size"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`

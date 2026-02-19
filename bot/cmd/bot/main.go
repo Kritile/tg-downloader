@@ -65,6 +65,7 @@ func main() {
 	permissionSvc := usecase.NewPermissionService(settingsRepo)
 	limitSvc := usecase.NewLimitService(downloadRepo, settingsRepo)
 	userService := usecase.NewUserService(userRepo)
+	formatSvc := usecase.NewFormatService(cfg.XraySocks5Proxy)
 
 	// Initialize queue service
 	queueService := worker.NewQueueService(redisClient)
@@ -77,11 +78,12 @@ func main() {
 		userService,
 		permissionSvc,
 		limitSvc,
+		formatSvc,
 		"/tmp/downloads",
 	)
 
 	// Initialize worker pool
-	workerPool := worker.NewWorkerPool(queueService, bot, cfg.WorkerCount, downloadRepo)
+	workerPool := worker.NewWorkerPool(queueService, bot, cfg.WorkerCount, downloadRepo, cfg.XraySocks5Proxy)
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())

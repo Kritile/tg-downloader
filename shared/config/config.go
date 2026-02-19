@@ -6,23 +6,25 @@ import (
 )
 
 type Config struct {
-	BotToken               string
-	DatabaseURL            string
-	RedisURL               string
-	GlobalDefaultDailyLimit   int
+	BotToken                string
+	DatabaseURL             string
+	RedisURL                string
+	GlobalDefaultDailyLimit int
 	GlobalDefaultMonthlyLimit int
-	WorkerCount            int
-	AdminPort              string
-	SessionSecret          string
+	WorkerCount             int
+	AdminPort               string
+	SessionSecret           string
+	XraySocks5Proxy         string
 }
 
 func Load() *Config {
 	cfg := &Config{
-		BotToken:    os.Getenv("BOT_TOKEN"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		RedisURL:    os.Getenv("REDIS_URL"),
-		AdminPort:   getEnvOrDefault("ADMIN_PORT", "8080"),
+		BotToken:      os.Getenv("BOT_TOKEN"),
+		DatabaseURL:   os.Getenv("DATABASE_URL"),
+		RedisURL:      os.Getenv("REDIS_URL"),
+		AdminPort:     getEnvOrDefault("ADMIN_PORT", "8080"),
 		SessionSecret: os.Getenv("SESSION_SECRET"),
+		XraySocks5Proxy: os.Getenv("XRAY_SOCKS5_PROXY"),
 	}
 
 	cfg.GlobalDefaultDailyLimit, _ = strconv.Atoi(getEnvOrDefault("GLOBAL_DEFAULT_DAILY_LIMIT", "10"))

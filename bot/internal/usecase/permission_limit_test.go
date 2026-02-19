@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mediaharvester/tg-downloader/bot/internal/domain"
 	"github.com/mediaharvester/tg-downloader/bot/internal/usecase"
 	"github.com/mediaharvester/tg-downloader/shared/models"
 )

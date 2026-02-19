@@ -1,4 +1,3 @@
-
 ## Project Name
 
 **MediaHarvester Bot**
@@ -6,86 +5,100 @@
 ## Project Type
 
 Public Telegram Bot for downloading videos from YouTube and TikTok
-With admin panel and per-user access control
+With admin panel, per-user access control, Redis queue, containerized SOCKS5 VPN for YouTube traffic, and video format selection
 
 ---
 
-# 1️⃣ GLOBAL RULES (MANDATORY)
+# 1️⃣ GLOBAL RULES
 
-1. All development MUST be done inside Docker.
-2. No host-level commands allowed.
-3. Every meaningful change MUST:
+* All development **inside Docker**.
+* No host-level commands allowed.
+* Every meaningful change MUST:
 
-   * Be committed
-   * Include clear commit message
-4. Every business rule MUST have unit tests.
-5. All services MUST be containerized.
-6. Use PostgreSQL and Redis.
-7. Follow Clean Architecture.
-8. No hardcoded secrets.
-9. Use environment variables only.
-10. The bot must delete downloaded files immediately after sending.
+  * Be committed with a clear message
+* Every business rule MUST have unit tests.
+* Use **PostgreSQL** and **Redis**.
+* Follow **Clean Architecture**.
+* No hardcoded secrets — use env variables.
+* Bot must **delete downloaded files immediately after sending**.
+* All **YouTube traffic** MUST go through **SOCKS5 Xray VPN container**.
+* TikTok traffic bypasses VPN.
 
 ---
 
-# 2️⃣ TECHNOLOGY STACK (STRICT)
+# 2️⃣ TECHNOLOGY STACK
 
-## Backend (Bot)
-
-* Language: Go 1.22+
-* Framework: standard library or minimal framework
-* Telegram: go-telegram-bot-api
-* Downloader: yt-dlp (via CLI execution)
-* Queue: Redis + worker pool
-* Logging: zap (structured logging)
-
-## Admin Panel
-
-* Backend: Go (Gin)
-* Frontend: HTMX + TailwindCSS (server-rendered)
-* Auth: session-based
-* Password hashing: bcrypt
-
-## Database
-
-* PostgreSQL 15+
-* Migrations: golang-migrate
-* ORM: GORM or sqlx
-
-## Queue
-
-* Redis 7+
-* Use Redis list or stream
-* Background worker processes
-
-## Infrastructure
-
-* Docker
-* Docker Compose
-* No Kubernetes
-* No external cloud dependencies
+* **Backend (Bot)**: Go 1.22+, Telegram go-telegram-bot-api, yt-dlp (CLI), Redis worker pool, zap logging
+* **Admin Panel**: Go (Gin), HTMX + TailwindCSS, session auth, bcrypt passwords
+* **Database**: PostgreSQL 15+, golang-migrate, GORM/sqlx
+* **Queue**: Redis 7+, list or stream
+* **VPN**: Xray client container with SOCKS5 proxy
+* **Downloader**: yt-dlp with `--list-formats` for format selection
 
 ---
 
 # 3️⃣ SYSTEM ARCHITECTURE
 
-The system must contain:
-
 ```
-/bot
-/admin
-/shared
-/migrations
-/docker
+docker-compose.yml:
+
+services:
+  bot:
+    build: ./bot
+    depends_on: [postgres, redis, xray-client]
+    environment:
+      - BOT_TOKEN
+      - DATABASE_URL
+      - REDIS_URL
+      - WORKER_COUNT
+      - SESSION_SECRET
+    networks:
+      - internal
+
+  admin:
+    build: ./admin
+    depends_on: [postgres, redis]
+    environment:
+      - DATABASE_URL
+      - SESSION_SECRET
+    networks:
+      - internal
+
+  postgres:
+    image: postgres:15
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=secret
+    networks:
+      - internal
+
+  redis:
+    image: redis:7
+    volumes:
+      - redisdata:/data
+    networks:
+      - internal
+
+  xray-client:
+    image: teddysun/xray
+    volumes:
+      - ./xray/config.json:/etc/xray/config.json
+    restart: unless-stopped
+    networks:
+      - internal
+
+networks:
+  internal:
+
+volumes:
+  pgdata:
+  redisdata:
 ```
 
-Services in docker-compose:
-
-* bot
-* admin
-* postgres
-* redis
-* yt-dlp container or installed in bot image
+* Xray SOCKS5 proxy listens on **0.0.0.0:10808** inside container
+* Bot routes **YouTube requests via proxy**
+* TikTok requests bypass VPN
 
 ---
 
@@ -93,188 +106,89 @@ Services in docker-compose:
 
 ## 4.1 Bot Behavior
 
-When a user sends a message:
-
-1. Validate URL
+1. Receive video URL from user
 2. Detect source:
 
-   * youtube
-   * tiktok
-3. Check:
+   * YouTube → route via SOCKS5 VPN
+   * TikTok → normal traffic
+3. Check user existence, else create
+4. Check permission for source
+5. Check daily/monthly limits
+6. **Format selection:**
 
-   * If user exists → else create
-   * Permission for source
-   * Daily limit
-   * Monthly limit
-4. If allowed:
-
-   * Push task to Redis queue
-   * Notify user "Downloading..."
-5. Worker:
-
-   * Pull job
-   * Execute yt-dlp
-   * Send video as Telegram video message
-   * Delete file immediately
-   * Log download
-   * Update counters
-6. If limit exceeded:
-
-   * Send limit message
-7. If not allowed:
-
-   * Send permission denied
+   * Query yt-dlp `--list-formats`
+   * Send available formats as Telegram buttons
+   * User selects format
+7. Push download job to Redis queue with chosen format
+8. Notify user “Downloading…”
+9. Worker executes yt-dlp with chosen format
+10. Send video as Telegram video message
+11. Delete file immediately after sending
+12. Log download, update counters
+13. Handle limit exceeded or blocked user with proper message
 
 ---
 
-# 5️⃣ LIMIT LOGIC (STRICT)
+# 5️⃣ LIMIT LOGIC
 
-## Priority:
-
-1. If user.daily_limit != NULL → use it
-2. Else → use global_daily_limit
-
-Same for monthly.
-
-Counters must be calculated by querying downloads table:
-
-* daily → WHERE created_at >= today 00:00
-* monthly → WHERE created_at >= first day of month
-
-No in-memory counters allowed.
+* Personal limit overrides global limit
+* Global limit applies if personal limit null
+* Daily/monthly counters computed from downloads table
+* No in-memory counters
 
 ---
 
 # 6️⃣ DATABASE SCHEMA
 
-## users
-
-* id (PK)
-* telegram_id (unique)
-* username
-* can_youtube (bool, nullable)
-* can_tiktok (bool, nullable)
-* daily_limit (int, nullable)
-* monthly_limit (int, nullable)
-* created_at
-* updated_at
+* **users**: telegram_id, username, can_youtube, can_tiktok, daily_limit, monthly_limit
+* **downloads**: user_id, source, video_url, format, created_at
+* **settings**: default_daily_limit, default_monthly_limit, default_youtube_allowed, default_tiktok_allowed
+* **admins**: username, password_hash
 
 ---
 
-## downloads
+# 7️⃣ ADMIN PANEL
 
-* id
-* user_id (FK)
-* source (varchar)
-* video_url
-* created_at
+* Manage users (permissions, limits)
+* Manage global settings (daily/monthly limit, enable/disable YouTube/TikTok)
+* Statistics (downloads today/month, top 10 users)
 
 ---
 
-## settings
+# 8️⃣ REDIS QUEUE
 
-* id
-* default_daily_limit
-* default_monthly_limit
-* default_youtube_allowed
-* default_tiktok_allowed
-
----
-
-## admins
-
-* id
-* username
-* password_hash
-* created_at
-
----
-
-# 7️⃣ ADMIN PANEL REQUIREMENTS
-
-## Must include:
-
-### User Management
-
-* Search by telegram_id
-* Toggle:
-
-  * YouTube access
-  * TikTok access
-* Set personal limits
-* Reset limits
-
-### Global Settings
-
-* Set default daily limit
-* Set default monthly limit
-* Enable/disable YouTube globally
-* Enable/disable TikTok globally
-
-### Statistics Page
-
-* Downloads today
-* Downloads this month
-* Top 10 users
-
----
-
-# 8️⃣ REDIS QUEUE REQUIREMENTS
-
-* Use Redis for job queue
-* Jobs must include:
-
-  * user_id
-  * url
-  * source
-* Workers must:
-
-  * Retry 2 times
-  * Log failures
+* Jobs include: user_id, url, source, chosen format
+* Worker retries 2 times on failure
 * Configurable worker count via ENV
+* YouTube jobs → routed through SOCKS5 VPN
 
 ---
 
-# 9️⃣ FILE HANDLING RULES
+# 9️⃣ FILE HANDLING
 
-* Download path: /tmp/downloads
-* After successful Telegram send:
-
-  * Immediately delete file
-* If send fails:
-
-  * Delete file anyway
-* No persistent video storage allowed
+* `/tmp/downloads` inside bot container
+* Delete after sending
+* Delete on error as well
 
 ---
 
 # 🔟 TELEGRAM LIMITS
 
-Bot API max file size: 50MB
-If file > 50MB:
-
-* Abort
-* Send message: "File too large"
-
-No self-hosted Bot API allowed.
+* Max file size: 50MB
+* If >50MB → abort and send message
 
 ---
 
-# 11️⃣ SECURITY REQUIREMENTS
+# 11️⃣ SECURITY
 
-* Validate URL format
-* Accept only:
-
-  * youtube.com
-  * youtu.be
-  * tiktok.com
-* Rate limit per user (anti-spam middleware)
-* Protect admin routes with authentication
+* Validate URL domain
+* Rate limit per user
+* Protect admin routes
 * CSRF protection enabled
 
 ---
 
-# 12️⃣ ENVIRONMENT VARIABLES
+# 12️⃣ ENV VARIABLES
 
 ```
 BOT_TOKEN=
@@ -285,84 +199,48 @@ GLOBAL_DEFAULT_MONTHLY_LIMIT=
 WORKER_COUNT=3
 ADMIN_PORT=8080
 SESSION_SECRET=
+XRAY_CONFIG_PATH=
 ```
 
 ---
 
-# 13️⃣ DOCKER REQUIREMENTS
+# 13️⃣ TESTING REQUIREMENTS
 
-All services must be defined in docker-compose.yml.
+### Unit Tests
 
-Must include:
-
-* postgres with volume
-* redis with volume
-* bot service
-* admin service
-
-Bot image must include:
-
-* yt-dlp installed
-* ffmpeg installed
-
-No manual setup allowed.
-
-Project must start with:
-
-```
-docker compose up --build
-```
-
----
-
-# 14️⃣ TESTING REQUIREMENTS (MANDATORY)
-
-AI must implement:
-
-## Unit Tests
-
-* Permission resolution logic
-* Daily limit logic
-* Monthly limit logic
+* Permission logic
+* Daily/monthly limits
 * Source detection
 * URL validation
+* Format selection logic
 
-## Integration Tests
+### Integration Tests
 
 * Redis queue processing
 * Database interaction
 * Worker job lifecycle
+* VPN routing check for YouTube
+* Format selection → download → send workflow
 
-Tests must:
-
-* Run inside Docker
-* Use separate test database
-* Have >70% coverage for business logic
+Tests run inside Docker with separate test database.
 
 ---
 
-# 15️⃣ GIT DISCIPLINE (MANDATORY)
+# 14️⃣ GIT DISCIPLINE
 
-AI must:
-
-* Commit after each logical milestone
-* Use conventional commit messages:
-
-Examples:
+* Commit after each milestone
+* Conventional commit messages:
 
 ```
-feat(bot): implement youtube detection
-feat(queue): add redis worker
-feat(admin): add user management page
-test(limits): add daily limit tests
+feat(bot): add youtube vpn routing
+feat(bot): add format selection via --list-formats
+test(limits): add daily/monthly limit tests
 refactor(domain): extract permission service
 ```
 
-No giant commits allowed.
-
 ---
 
-# 16️⃣ CLEAN ARCHITECTURE STRUCTURE
+# 15️⃣ CLEAN ARCHITECTURE
 
 ```
 internal/
@@ -376,59 +254,21 @@ cmd/
   admin/
 ```
 
-Dependencies must point inward only.
-
-No circular imports.
-
----
-
-# 17️⃣ FUTURE EXTENSION PREPARATION
-
-Code must be designed to support future:
-
-* Paid subscriptions
-* Role-based access (free/premium)
-* Payment integration
-* S3 storage
-* Instagram support
-
-Architecture must allow extension without rewriting core logic.
+* Dependencies inward only
+* No circular imports
 
 ---
 
-# 18️⃣ NON-FUNCTIONAL REQUIREMENTS
+# 16️⃣ ACCEPTANCE CRITERIA
 
-* Max 100 downloads/hour
-* Graceful shutdown
-* Context-based cancellation
-* Structured logging
-* Healthcheck endpoint for bot and admin
-
----
-
-# 19️⃣ ACCEPTANCE CRITERIA
-
-The system is complete when:
-
-* User can send YouTube link and receive video
-* User can send TikTok link and receive video
+* Bot sends TikTok videos normally
+* Bot sends YouTube videos via **SOCKS5 VPN**
+* User can select video format before download
 * Limits enforced
-* Admin panel can modify user permissions
-* Redis queue processes jobs
+* Admin panel manages users & global settings
+* Redis queue works
 * Files deleted after sending
-* All services run in Docker
+* Docker-compose runs all services cleanly
 * Tests pass
 
----
-
-If needed, I can also provide:
-
-* Redis job schema definition
-* Full folder tree example
-* Database migration files
-* Initial commit breakdown plan
-* ER diagram
-* CI pipeline spec
-
-Tell me if you want CI/CD included.
 

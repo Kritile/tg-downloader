@@ -7,6 +7,7 @@ type DownloadJob struct {
 	URL      string `json:"url"`
 	Source   string `json:"source"`
 	Username string `json:"username"`
+	Format   string `json:"format,omitempty"`
 }
 
 // VideoSource represents the source of a video
@@ -22,12 +23,24 @@ const (
 type DownloadStatus string
 
 const (
-	StatusPending    DownloadStatus = "pending"
+	StatusPending     DownloadStatus = "pending"
 	StatusDownloading DownloadStatus = "downloading"
-	StatusCompleted  DownloadStatus = "completed"
-	StatusFailed     DownloadStatus = "failed"
-	StatusTooLarge   DownloadStatus = "too_large"
+	StatusCompleted   DownloadStatus = "completed"
+	StatusFailed      DownloadStatus = "failed"
+	StatusTooLarge    DownloadStatus = "too_large"
 )
 
 // Telegram max file size: 50MB
 const MaxTelegramFileSize = 50 * 1024 * 1024
+
+// VideoFormat represents a video format option
+type VideoFormat struct {
+	ID          string `json:"id"`
+	FormatID    string `json:"format_id"`
+	Extension   string `json:"extension"`
+	Resolution  string `json:"resolution"`
+	FileSize    int64  `json:"file_size,omitempty"`
+	TBR         float64`json:"tbr,omitempty"` // Total bitrate in kbps
+	FormatNote  string `json:"format_note,omitempty"`
+	DisplayName string `json:"display_name"`
+}
