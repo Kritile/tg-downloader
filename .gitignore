@@ -1,0 +1,39 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/vendor
+/go.sum
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+/tmp/
+*.tmp
+*.log
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Test coverage
+coverage.txt
+
+# Misc
+.DS_Store
+Thumbs.db

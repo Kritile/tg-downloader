@@ -1,0 +1,161 @@
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mediaharvester/tg-downloader/bot/internal/repository"
+	"github.com/mediaharvester/tg-downloader/bot/internal/transport"
+	"github.com/mediaharvester/tg-downloader/bot/internal/usecase"
+	"github.com/mediaharvester/tg-downloader/bot/internal/worker"
+	"github.com/mediaharvester/tg-downloader/shared/config"
+	"github.com/redis/go-redis/v9"
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	log.Println("Starting MediaHarvester Bot...")
+
+	// Load configuration
+	cfg := config.Load()
+
+	// Validate required config
+	if cfg.BotToken == "" {
+		log.Fatal("BOT_TOKEN is required")
+	}
+	if cfg.DatabaseURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	if cfg.RedisURL == "" {
+		log.Fatal("REDIS_URL is required")
+	}
+
+	// Connect to database
+	db, err := initDatabase(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+
+	// Connect to Redis
+	redisClient := initRedis(cfg.RedisURL)
+	defer redisClient.Close()
+
+	// Initialize Telegram bot
+	botAPI, err := tgbotapi.NewBotAPI(cfg.BotToken)
+	if err != nil {
+		log.Fatalf("Failed to initialize bot: %v", err)
+	}
+	log.Printf("Authorized on account %s", botAPI.Self.UserName)
+
+	// Initialize repositories
+	userRepo := repository.NewUserRepository(db)
+	downloadRepo := repository.NewDownloadRepository(db)
+	settingsRepo := repository.NewSettingsRepository(db)
+
+	// Initialize usecases
+	urlValidator := usecase.NewURLValidator()
+	permissionSvc := usecase.NewPermissionService(settingsRepo)
+	limitSvc := usecase.NewLimitService(downloadRepo, settingsRepo)
+	userService := usecase.NewUserService(userRepo)
+
+	// Initialize queue service
+	queueService := worker.NewQueueService(redisClient)
+
+	// Initialize bot
+	bot := transport.NewBot(
+		botAPI,
+		urlValidator,
+		queueService,
+		userService,
+		permissionSvc,
+		limitSvc,
+		"/tmp/downloads",
+	)
+
+	// Initialize worker pool
+	workerPool := worker.NewWorkerPool(queueService, bot, cfg.WorkerCount, downloadRepo)
+
+	// Create context with cancellation
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Setup signal handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Start bot in a goroutine
+	go func() {
+		if err := bot.Start(ctx); err != nil {
+			log.Printf("Bot error: %v", err)
+		}
+	}()
+
+	// Start worker pool in a goroutine
+	go func() {
+		if err := workerPool.Start(ctx); err != nil {
+			log.Printf("Worker pool error: %v", err)
+		}
+	}()
+
+	log.Println("Bot and workers are running")
+
+	// Wait for shutdown signal
+	sig := <-sigChan
+	log.Printf("Received signal %v, shutting down...", sig)
+
+	cancel()
+
+	// Graceful shutdown timeout
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	<-shutdownCtx.Done()
+	log.Println("Shutdown complete")
+}
+
+func initDatabase(databaseURL string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Test connection
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	// Set connection pool settings
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(5)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	log.Println("Connected to database")
+	return db, nil
+}
+
+func initRedis(redisURL string) *redis.Client {
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+
+	client := redis.NewClient(opt)
+
+	// Test connection
+	ctx := context.Background()
+	_, err = client.Ping(ctx).Result()
+	if err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+
+	log.Println("Connected to Redis")
+	return client
+}

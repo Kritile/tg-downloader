@@ -1,0 +1,68 @@
+{{ define "content" }}
+<div class="mb-8">
+    <h2 class="text-3xl font-bold text-gray-800">Global Settings</h2>
+    <p class="text-gray-600 mt-2">Configure default limits and permissions</p>
+</div>
+
+{{ if .success }}
+<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+    Settings updated successfully!
+</div>
+{{ end }}
+
+<div class="bg-white rounded-lg shadow p-6">
+    <form action="/settings" method="POST">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Default Daily Limit -->
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="default_daily_limit">
+                    Default Daily Limit
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                       id="default_daily_limit" name="default_daily_limit" type="number" 
+                       value="{{ .settings.DefaultDailyLimit }}" min="1">
+                <p class="text-gray-500 text-xs mt-1">Number of downloads allowed per day</p>
+            </div>
+
+            <!-- Default Monthly Limit -->
+            <div>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="default_monthly_limit">
+                    Default Monthly Limit
+                </label>
+                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+                       id="default_monthly_limit" name="default_monthly_limit" type="number" 
+                       value="{{ .settings.DefaultMonthlyLimit }}" min="1">
+                <p class="text-gray-500 text-xs mt-1">Number of downloads allowed per month</p>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">Source Permissions</h3>
+            
+            <div class="flex items-center mb-4">
+                <input type="checkbox" id="default_youtube_allowed" name="default_youtube_allowed" 
+                       {{ if .settings.DefaultYoutubeAllowed }}checked{{ end }}
+                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                <label class="ml-2 text-gray-700" for="default_youtube_allowed">
+                    Allow YouTube Downloads
+                </label>
+            </div>
+
+            <div class="flex items-center">
+                <input type="checkbox" id="default_tiktok_allowed" name="default_tiktok_allowed" 
+                       {{ if .settings.DefaultTiktokAllowed }}checked{{ end }}
+                       class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                <label class="ml-2 text-gray-700" for="default_tiktok_allowed">
+                    Allow TikTok Downloads
+                </label>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded focus:outline-none focus:shadow-outline transition">
+                Save Settings
+            </button>
+        </div>
+    </form>
+</div>
+{{ end }}
