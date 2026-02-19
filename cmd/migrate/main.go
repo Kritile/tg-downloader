@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	_ "github.com/lib/pq"
 )
@@ -62,6 +63,11 @@ func main() {
 
 		_, err = db.Exec(string(content))
 		if err != nil {
+			// Check if it's a "already exists" error - if so, skip it
+			if strings.Contains(err.Error(), "already exists") {
+				log.Printf("Skipping migration %s: already applied", filepath.Base(file))
+				continue
+			}
 			log.Fatalf("Failed to execute migration %s: %v", file, err)
 		}
 
