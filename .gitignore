@@ -37,3 +37,6 @@ coverage.txt
 # Misc
 .DS_Store
 Thumbs.db
+
+# VPN Config (contains sensitive credentials)
+xray/config.json

@@ -135,12 +135,13 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	// Generate output template
 	outputTemplate := filepath.Join(fullPath, "%(id)s.%(ext)s")
 
-	// Determine if we need to use proxy (YouTube)
+	// Determine if we need to use proxy (YouTube and TikTok)
 	isYouTube := job.Source == string(models.SourceYoutube)
 	isTikTok := job.Source == string(models.SourceTiktok)
+	useProxy := isYouTube || isTikTok
 
 	// Build yt-dlp command
-	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, isYouTube, isTikTok)
+	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, useProxy, isTikTok)
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
@@ -185,14 +186,14 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 }
 
 // buildYtDlpArgs builds yt-dlp command arguments
-func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, isYouTube, isTikTok bool) []string {
+func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProxy, isTikTok bool) []string {
 	args := []string{
 		"--no-playlist", // Don't download playlists
 		"--output", outputTemplate,
 	}
 
-	// Add proxy for YouTube
-	if isYouTube && wp.proxyAddr != "" {
+	// Add proxy for YouTube and TikTok
+	if useProxy && wp.proxyAddr != "" {
 		args = append(args, "--proxy", "socks5://"+wp.proxyAddr)
 	}
 

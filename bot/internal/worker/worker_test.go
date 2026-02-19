@@ -14,7 +14,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"22",
-			true,  // isYouTube
+			true,  // useProxy
 			false, // isTikTok
 		)
 
@@ -60,13 +60,42 @@ func TestBuildYtDlpArgs(t *testing.T) {
 		}
 	})
 
+	t.Run("TikTok with proxy", func(t *testing.T) {
+		args := wp.buildYtDlpArgs(
+			"https://tiktok.com/@user/video/test",
+			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"",
+			true,  // useProxy
+			true,  // isTikTok
+		)
+
+		hasProxy := false
+		hasImpersonate := false
+
+		for i, arg := range args {
+			if arg == "--proxy" && i+1 < len(args) && args[i+1] == "socks5://xray-client:10808" {
+				hasProxy = true
+			}
+			if arg == "--impersonate" && i+1 < len(args) && args[i+1] == "chrome:120" {
+				hasImpersonate = true
+			}
+		}
+
+		if !hasProxy {
+			t.Error("expected proxy argument for TikTok")
+		}
+		if !hasImpersonate {
+			t.Error("expected --impersonate for TikTok")
+		}
+	})
+
 	t.Run("YouTube without proxy configured", func(t *testing.T) {
 		wpNoProxy := &WorkerPool{proxyAddr: ""}
 		args := wpNoProxy.buildYtDlpArgs(
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			true,  // isYouTube
+			false, // useProxy
 			false, // isTikTok
 		)
 
@@ -88,7 +117,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://tiktok.com/@user/video/test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			false, // isYouTube
+			true,  // useProxy
 			true,  // isTikTok
 		)
 
@@ -117,7 +146,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			true,  // isYouTube
+			true,  // useProxy
 			false, // isTikTok
 		)
 
@@ -139,7 +168,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"137+140",
-			true,  // isYouTube
+			true,  // useProxy
 			false, // isTikTok
 		)
 
