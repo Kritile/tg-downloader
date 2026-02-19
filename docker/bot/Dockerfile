@@ -5,10 +5,11 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
     python3-pip \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Install latest yt-dlp via pip
-RUN pip3 install --break-system-packages -U yt-dlp
+# Install latest yt-dlp via pip with impersonation support (curl-cffi)
+RUN pip3 install --break-system-packages -U yt-dlp curl-cffi
 
 WORKDIR /app
 

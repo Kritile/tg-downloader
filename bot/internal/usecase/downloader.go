@@ -38,12 +38,17 @@ func (s *downloaderService) Download(ctx context.Context, url string, destPath s
 	// Generate output template
 	outputTemplate := filepath.Join(s.downloadPath, destPath, "%(id)s.%(ext)s")
 
-	// Build yt-dlp command
+	// Build yt-dlp command with TikTok-specific options
 	args := []string{
-		"--format", "best[height<=720]", // Limit quality to reduce file size
+		"--format", "best[height<=720]/best", // Allow fallback to any best format
 		"--output", outputTemplate,
 		"--no-playlist", // Don't download playlists
-		url,
+		"--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+	}
+	
+	// Add TikTok-specific impersonation if it's a TikTok URL
+	if strings.Contains(url, "tiktok.com") {
+		args = append(args, "--extractor-args", "tiktok:api=api")
 	}
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
