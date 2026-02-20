@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -21,17 +22,35 @@ func main() {
 	migrationsDir := flag.String("dir", "./migrations", "Directory containing migration files")
 	flag.Parse()
 
-	db, err := sql.Open("postgres", databaseURL)
+	// Retry logic for database connection
+	var db *sql.DB
+	var err error
+	maxRetries := 10
+	retryDelay := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		db, err = sql.Open("postgres", databaseURL)
+		if err != nil {
+			log.Printf("Failed to open database (attempt %d/%d): %v", i+1, maxRetries, err)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		if err := db.Ping(); err != nil {
+			log.Printf("Failed to ping database (attempt %d/%d): %v", i+1, maxRetries, err)
+			db.Close()
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		log.Println("Connected to database")
+		break
+	}
+
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to database after %d attempts: %v", maxRetries, err)
 	}
 	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
-	}
-
-	log.Println("Connected to database")
 
 	// Read and execute migration files
 	files, err := filepath.Glob(filepath.Join(*migrationsDir, "*.sql"))
