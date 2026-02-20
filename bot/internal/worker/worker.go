@@ -205,9 +205,8 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProx
 		// Default format selection
 		if isTikTok {
 			// TikTok needs more flexible format selection
-			// Use available impersonation target
+			// No impersonation - relies on proxy for geo-unblocking
 			args = append(args, "--format", "best")
-			args = append(args, "--impersonate", "chrome:119")
 		} else {
 			// YouTube and others - prefer 720p or lower to stay under Telegram limit
 			args = append(args, "--format", "best[height<=720]/best")

@@ -51,10 +51,7 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 		args = append(args, "--proxy", "socks5://"+s.proxyAddr)
 	}
 
-	// Add TikTok-specific options
-	if source == models.SourceTiktok {
-		args = append(args, "--impersonate", "chrome:119")
-	}
+	// Add TikTok-specific options (no impersonation - relies on proxy)
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
