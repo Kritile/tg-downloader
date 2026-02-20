@@ -47,7 +47,8 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 	// Add proxy for YouTube and TikTok
 	useProxy := source == models.SourceYoutube || source == models.SourceTiktok
 	if useProxy && s.proxyAddr != "" {
-		args = append(args, "--proxy", "socks5h://"+s.proxyAddr)
+		// proxyAddr format: "user:pass@host:port" or "host:port"
+		args = append(args, "--proxy", "socks5://"+s.proxyAddr)
 	}
 
 	// Add TikTok-specific options

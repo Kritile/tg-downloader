@@ -194,7 +194,8 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProx
 
 	// Add proxy for YouTube and TikTok
 	if useProxy && wp.proxyAddr != "" {
-		args = append(args, "--proxy", "socks5h://"+wp.proxyAddr)
+		// proxyAddr format: "user:pass@host:port" or "host:port"
+		args = append(args, "--proxy", "socks5://"+wp.proxyAddr)
 	}
 
 	// Add format selection
