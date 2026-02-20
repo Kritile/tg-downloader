@@ -144,9 +144,19 @@ func (s *AdminServer) authMiddleware() gin.HandlerFunc {
 }
 
 func (s *AdminServer) handleLoginGET(c *gin.Context) {
-	c.HTML(http.StatusOK, "login.html", gin.H{
+	// Login page is standalone (no base template)
+	loginTemplate, err := template.ParseFiles("/app/admin/templates/login.html")
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Template error: %v", err)
+		return
+	}
+
+	err = loginTemplate.Execute(c.Writer, gin.H{
 		"error": c.Query("error"),
 	})
+	if err != nil {
+		c.String(http.StatusInternalServerError, "Render error: %v", err)
+	}
 }
 
 func (s *AdminServer) handleLoginPOST(c *gin.Context) {
