@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+
 	"github.com/mediaharvester/tg-downloader/shared/models"
 )
 
@@ -24,6 +25,7 @@ type LimitService interface {
 
 type UserService interface {
 	GetOrCreate(ctx context.Context, telegramID int64, username string) (*models.User, error)
+	SetAutoBestDownload(ctx context.Context, userID int64, autoBest bool) error
 }
 
 type DownloadService interface {

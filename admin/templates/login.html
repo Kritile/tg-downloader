@@ -8,33 +8,24 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
     <div class="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <h1 class="text-2xl font-bold text-center text-gray-800 mb-8">MediaHarvester Admin</h1>
-        
+        <h1 class="text-2xl font-bold text-center text-gray-800 mb-2">MediaHarvester Admin</h1>
+        <p class="text-xs text-center text-gray-500 mb-6">Secure login with CSRF protection and session hardening</p>
+
         {{ if .error }}
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            Invalid username or password
-        </div>
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">Authentication failed or request blocked.</div>
         {{ end }}
-        
+
         <form action="/login" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ .csrf_token }}">
             <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="username">
-                    Username
-                </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-                       id="username" name="username" type="text" required>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="username">Username</label>
+                <input class="shadow border rounded w-full py-2 px-3 text-gray-700" id="username" name="username" type="text" minlength="3" maxlength="64" autocomplete="username" required>
             </div>
             <div class="mb-6">
-                <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
-                    Password
-                </label>
-                <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
-                       id="password" name="password" type="password" required>
+                <label class="block text-gray-700 text-sm font-bold mb-2" for="password">Password</label>
+                <input class="shadow border rounded w-full py-2 px-3 text-gray-700" id="password" name="password" type="password" minlength="8" maxlength="256" autocomplete="current-password" required>
             </div>
-            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full focus:outline-none focus:shadow-outline" 
-                    type="submit">
-                Sign In
-            </button>
+            <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full" type="submit">Sign In</button>
         </form>
     </div>
 </body>

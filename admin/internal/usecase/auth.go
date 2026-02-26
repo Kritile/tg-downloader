@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/mediaharvester/tg-downloader/admin/internal/domain"
 	"github.com/mediaharvester/tg-downloader/shared/models"
@@ -27,20 +28,18 @@ func (s *adminUserService) Authenticate(ctx context.Context, username, password 
 
 	err = bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(password))
 	if err != nil {
-		return nil, errors.New("invalid credentials")
+		return nil, domain.ErrInvalidCredentials
 	}
 
 	return admin, nil
 }
 
 func (s *adminUserService) CreateAdmin(ctx context.Context, username, password string) error {
-	// Check if admin already exists
 	_, err := s.adminRepo.GetByUsername(ctx, username)
 	if err == nil {
 		return errors.New("admin already exists")
 	}
 
-	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return err
@@ -52,4 +51,29 @@ func (s *adminUserService) CreateAdmin(ctx context.Context, username, password s
 	}
 
 	return s.adminRepo.Create(ctx, admin)
+}
+
+func (s *adminUserService) ChangePassword(ctx context.Context, adminID int64, currentPassword, newPassword string) error {
+	if len(newPassword) < 12 {
+		return errors.New("new password must contain at least 12 characters")
+	}
+	if strings.EqualFold(currentPassword, newPassword) {
+		return errors.New("new password must be different from current password")
+	}
+
+	admin, err := s.adminRepo.GetByID(ctx, adminID)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(currentPassword)); err != nil {
+		return domain.ErrInvalidCredentials
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	return s.adminRepo.UpdatePasswordHash(ctx, adminID, string(hashedPassword))
 }
