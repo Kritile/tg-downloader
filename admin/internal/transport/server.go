@@ -61,6 +61,12 @@ func NewAdminServer(
 	funcMap := template.FuncMap{
 		"add": func(a, b int) int { return a + b },
 		"sub": func(a, b int) int { return a - b },
+		"isTrue": func(v *bool) bool {
+			return v != nil && *v
+		},
+		"isFalse": func(v *bool) bool {
+			return v != nil && !*v
+		},
 	}
 
 	baseTemplate := template.Must(template.New("base.html").Funcs(funcMap).ParseFiles("/app/admin/templates/base.html"))
@@ -435,14 +441,16 @@ func (s *AdminServer) handleStats(c *gin.Context) {
 	month, _ := s.statsSvc.GetDownloadsThisMonth(ctx)
 	topUsers, topCounts, _ := s.statsSvc.GetTopUsers(ctx, 10)
 	totalUsers, _ := s.statsSvc.GetTotalUsers(ctx)
+	bySource, _ := s.statsSvc.GetDownloadsBySource(ctx)
 
 	s.renderPage(c, "stats.html", gin.H{
-		"downloads_today": today,
-		"downloads_month": month,
-		"top_users":       topUsers,
-		"top_counts":      topCounts,
-		"total_users":     totalUsers,
-		"current_page":    "stats",
+		"downloads_today":  today,
+		"downloads_month":  month,
+		"top_users":        topUsers,
+		"top_counts":       topCounts,
+		"total_users":      totalUsers,
+		"downloads_source": bySource,
+		"current_page":     "stats",
 	})
 }
 

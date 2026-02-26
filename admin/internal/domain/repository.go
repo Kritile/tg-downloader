@@ -44,6 +44,7 @@ type DownloadRepository interface {
 	GetDownloadsThisMonth(ctx context.Context) (int, error)
 	GetTopUsers(ctx context.Context, limit int) ([]*models.User, []int, error)
 	GetTotalUsers(ctx context.Context) (int, error)
+	GetDownloadsBySource(ctx context.Context) (map[string]int, error)
 }
 
 // Service interfaces
@@ -71,4 +72,5 @@ type AdminStatsService interface {
 	GetDownloadsThisMonth(ctx context.Context) (int, error)
 	GetTopUsers(ctx context.Context, limit int) ([]*models.User, []int, error)
 	GetTotalUsers(ctx context.Context) (int, error)
+	GetDownloadsBySource(ctx context.Context) (map[string]int, error)
 }
