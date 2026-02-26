@@ -18,7 +18,7 @@ func NewSettingsRepository(db *sql.DB) domain.SettingsRepository {
 
 func (r *settingsRepository) Get(ctx context.Context) (*models.Settings, error) {
 	query := `
-		SELECT id, default_daily_limit, default_monthly_limit, default_youtube_allowed, default_tiktok_allowed
+		SELECT id, default_daily_limit, default_monthly_limit, default_youtube_allowed, default_instagram_allowed, default_tiktok_allowed
 		FROM settings
 		WHERE id = 1
 	`
@@ -29,6 +29,7 @@ func (r *settingsRepository) Get(ctx context.Context) (*models.Settings, error) 
 		&settings.DefaultDailyLimit,
 		&settings.DefaultMonthlyLimit,
 		&settings.DefaultYoutubeAllowed,
+		&settings.DefaultInstagramAllowed,
 		&settings.DefaultTiktokAllowed,
 	)
 
@@ -45,7 +46,7 @@ func (r *settingsRepository) Get(ctx context.Context) (*models.Settings, error) 
 func (r *settingsRepository) Update(ctx context.Context, settings *models.Settings) error {
 	query := `
 		UPDATE settings
-		SET default_daily_limit = $2, default_monthly_limit = $3, default_youtube_allowed = $4, default_tiktok_allowed = $5
+		SET default_daily_limit = $2, default_monthly_limit = $3, default_youtube_allowed = $4, default_instagram_allowed = $5, default_tiktok_allowed = $6
 		WHERE id = $1
 	`
 
@@ -54,6 +55,7 @@ func (r *settingsRepository) Update(ctx context.Context, settings *models.Settin
 		settings.DefaultDailyLimit,
 		settings.DefaultMonthlyLimit,
 		settings.DefaultYoutubeAllowed,
+		settings.DefaultInstagramAllowed,
 		settings.DefaultTiktokAllowed,
 	)
 

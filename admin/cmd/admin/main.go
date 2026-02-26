@@ -5,14 +5,15 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
+	_ "github.com/lib/pq"
 	"github.com/mediaharvester/tg-downloader/admin/internal/domain"
 	"github.com/mediaharvester/tg-downloader/admin/internal/repository"
 	"github.com/mediaharvester/tg-downloader/admin/internal/transport"
 	"github.com/mediaharvester/tg-downloader/admin/internal/usecase"
 	"github.com/mediaharvester/tg-downloader/shared/config"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -87,16 +88,24 @@ func initDatabase(databaseURL string) (*sql.DB, error) {
 
 func createDefaultAdmin(authService domain.AdminUserService) {
 	ctx := context.Background()
-	
-	// Try to create default admin
-	// In production, this should be done via CLI command
-	username := "admin"
-	password := "admin123" // Change this!
-	
+	username := os.Getenv("ADMIN_INITIAL_USERNAME")
+	if username == "" {
+		username = "admin"
+	}
+	password := os.Getenv("ADMIN_INITIAL_PASSWORD")
+	if password == "" {
+		log.Println("ADMIN_INITIAL_PASSWORD is not set; skip default admin creation for security")
+		return
+	}
+	if len(password) < 12 {
+		log.Println("ADMIN_INITIAL_PASSWORD must be at least 12 chars; skip admin creation")
+		return
+	}
+
 	err := authService.CreateAdmin(ctx, username, password)
 	if err == nil {
-		log.Printf("⚠️  Default admin created: username=%s, password=%s", username, password)
-		log.Println("⚠️  Please change the password immediately after first login!")
+		log.Printf("Default admin created: username=%s", username)
+		log.Println("Please rotate ADMIN_INITIAL_PASSWORD after first successful login.")
 	} else {
 		log.Printf("Admin user may already exist: %v", err)
 	}
