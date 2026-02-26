@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/mediaharvester/tg-downloader/admin/internal/domain"
 	"github.com/mediaharvester/tg-downloader/shared/models"
@@ -29,15 +30,18 @@ func (s *adminUserManagementService) GetUserByTelegramID(ctx context.Context, te
 func (s *adminUserManagementService) UpdateUserPermissions(
 	ctx context.Context,
 	userID int64,
-	canYoutube, canTiktok *bool,
+	canYoutube, canInstagram, canTiktok *bool,
 ) error {
-	user, err := s.userRepo.GetByTelegramID(ctx, userID)
+	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
 
 	if canYoutube != nil {
 		user.CanYoutube = canYoutube
+	}
+	if canInstagram != nil {
+		user.CanInstagram = canInstagram
 	}
 	if canTiktok != nil {
 		user.CanTiktok = canTiktok
@@ -51,7 +55,7 @@ func (s *adminUserManagementService) UpdateUserLimits(
 	userID int64,
 	dailyLimit, monthlyLimit *int,
 ) error {
-	user, err := s.userRepo.GetByTelegramID(ctx, userID)
+	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -67,13 +71,13 @@ func (s *adminUserManagementService) UpdateUserLimits(
 }
 
 func (s *adminUserManagementService) GetAllUsers(ctx context.Context, limit, offset int) ([]*models.User, int, error) {
-	// TODO: Implement pagination in repository
-	// For now, return a placeholder
-	return []*models.User{}, 0, nil
+	return s.userRepo.GetAll(ctx, limit, offset)
 }
 
 func (s *adminUserManagementService) SearchUsers(ctx context.Context, query string, limit int) ([]*models.User, error) {
-	// TODO: Implement search in repository
-	// For now, return empty
-	return []*models.User{}, nil
+	telegramID, err := strconv.ParseInt(query, 10, 64)
+	if err != nil {
+		return []*models.User{}, nil
+	}
+	return s.userRepo.SearchByTelegramID(ctx, telegramID, limit)
 }

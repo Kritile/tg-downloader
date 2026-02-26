@@ -20,11 +20,11 @@ const (
 )
 
 type WorkerPool struct {
-	queueService   *QueueService
-	bot            domain.Notifier
-	workerCount    int
-	downloadRepo   domain.DownloadRepository
-	proxyAddr      string
+	queueService *QueueService
+	bot          domain.Notifier
+	workerCount  int
+	downloadRepo domain.DownloadRepository
+	proxyAddr    string
 }
 
 func NewWorkerPool(
@@ -35,11 +35,11 @@ func NewWorkerPool(
 	proxyAddr string,
 ) *WorkerPool {
 	return &WorkerPool{
-		queueService:   queueService,
-		bot:            bot,
-		workerCount:    workerCount,
-		downloadRepo:   downloadRepo,
-		proxyAddr:      proxyAddr,
+		queueService: queueService,
+		bot:          bot,
+		workerCount:  workerCount,
+		downloadRepo: downloadRepo,
+		proxyAddr:    proxyAddr,
 	}
 }
 
@@ -112,9 +112,9 @@ func (wp *WorkerPool) processWithRetry(ctx context.Context, job *models.Download
 		lastErr = err
 
 		// Don't retry on certain errors
-		if err == domain.ErrPermissionDenied || 
-		   err == domain.ErrDailyLimitExceeded || 
-		   err == domain.ErrMonthlyLimitExceeded {
+		if err == domain.ErrPermissionDenied ||
+			err == domain.ErrDailyLimitExceeded ||
+			err == domain.ErrMonthlyLimitExceeded {
 			return err
 		}
 	}
@@ -135,13 +135,12 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	// Generate output template
 	outputTemplate := filepath.Join(fullPath, "%(id)s.%(ext)s")
 
-	// Determine if we need to use proxy (YouTube and TikTok)
-	isYouTube := job.Source == string(models.SourceYoutube)
+	// Determine source-specific behavior
 	isTikTok := job.Source == string(models.SourceTiktok)
-	useProxy := isYouTube || isTikTok
+	isReels := job.Source == string(models.SourceReels)
 
 	// Build yt-dlp command
-	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, useProxy, isTikTok)
+	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, isTikTok, isReels)
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
@@ -186,14 +185,14 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 }
 
 // buildYtDlpArgs builds yt-dlp command arguments
-func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProxy, isTikTok bool) []string {
+func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, isTikTok, isReels bool) []string {
 	args := []string{
 		"--no-playlist", // Don't download playlists
 		"--output", outputTemplate,
 	}
 
-	// Add proxy for YouTube and TikTok
-	if useProxy && wp.proxyAddr != "" {
+	// All requests should go through proxy
+	if wp.proxyAddr != "" {
 		// proxyAddr format: "user:pass@host:port" or "host:port"
 		args = append(args, "--proxy", "socks5://"+wp.proxyAddr)
 	}
@@ -203,10 +202,8 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProx
 		args = append(args, "--format", format)
 	} else {
 		// Default format selection
-		if isTikTok {
-			// TikTok needs more flexible format selection
-			// No impersonation - relies on proxy for geo-unblocking
-			args = append(args, "--format", "best")
+		if isTikTok || isReels {
+			args = append(args, "--format", "b")
 		} else {
 			// YouTube and others - prefer 720p or lower to stay under Telegram limit
 			args = append(args, "--format", "best[height<=720]/best")
@@ -274,7 +271,7 @@ func CleanupDownloadedFile(filePath string) {
 		return
 	}
 	os.Remove(filePath)
-	
+
 	// Try to remove the parent directory if empty
 	dir := filepath.Dir(filePath)
 	os.Remove(dir) // Ignore errors

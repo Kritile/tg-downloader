@@ -23,21 +23,17 @@ func NewAdminStatsService(
 }
 
 func (s *adminStatsService) GetDownloadsToday(ctx context.Context) (int, error) {
-	// TODO: Implement in repository
-	return 0, nil
+	return s.downloadRepo.GetDownloadsToday(ctx)
 }
 
 func (s *adminStatsService) GetDownloadsThisMonth(ctx context.Context) (int, error) {
-	// TODO: Implement in repository
-	return 0, nil
+	return s.downloadRepo.GetDownloadsThisMonth(ctx)
 }
 
 func (s *adminStatsService) GetTopUsers(ctx context.Context, limit int) ([]*models.User, []int, error) {
-	// TODO: Implement in repository
-	return []*models.User{}, []int{}, nil
+	return s.downloadRepo.GetTopUsers(ctx, limit)
 }
 
 func (s *adminStatsService) GetTotalUsers(ctx context.Context) (int, error) {
-	// TODO: Implement in repository
-	return 0, nil
+	return s.downloadRepo.GetTotalUsers(ctx)
 }

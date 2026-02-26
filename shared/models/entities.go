@@ -3,15 +3,17 @@ package models
 import "time"
 
 type User struct {
-	ID           int64      `json:"id"`
-	TelegramID   int64      `json:"telegram_id"`
-	Username     string     `json:"username"`
-	CanYoutube   *bool      `json:"can_youtube"`
-	CanTiktok    *bool      `json:"can_tiktok"`
-	DailyLimit   *int       `json:"daily_limit"`
-	MonthlyLimit *int       `json:"monthly_limit"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID               int64     `json:"id"`
+	TelegramID       int64     `json:"telegram_id"`
+	Username         string    `json:"username"`
+	CanYoutube       *bool     `json:"can_youtube"`
+	CanInstagram     *bool     `json:"can_instagram"`
+	CanTiktok        *bool     `json:"can_tiktok"`
+	DailyLimit       *int      `json:"daily_limit"`
+	MonthlyLimit     *int      `json:"monthly_limit"`
+	AutoBestDownload *bool     `json:"auto_best_download"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type Download struct {
@@ -26,11 +28,12 @@ type Download struct {
 }
 
 type Settings struct {
-	ID                  int64 `json:"id"`
-	DefaultDailyLimit   int   `json:"default_daily_limit"`
-	DefaultMonthlyLimit int   `json:"default_monthly_limit"`
-	DefaultYoutubeAllowed bool `json:"default_youtube_allowed"`
-	DefaultTiktokAllowed  bool `json:"default_tiktok_allowed"`
+	ID                      int64 `json:"id"`
+	DefaultDailyLimit       int   `json:"default_daily_limit"`
+	DefaultMonthlyLimit     int   `json:"default_monthly_limit"`
+	DefaultYoutubeAllowed   bool  `json:"default_youtube_allowed"`
+	DefaultInstagramAllowed bool  `json:"default_instagram_allowed"`
+	DefaultTiktokAllowed    bool  `json:"default_tiktok_allowed"`
 }
 
 type Admin struct {
