@@ -210,6 +210,9 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, isTikTo
 		}
 	}
 
+	if isTikTok || isReels {
+		args = append(args, "--impersonate", "chrome:120")
+	}
 	args = append(args, url)
 	return args
 }
