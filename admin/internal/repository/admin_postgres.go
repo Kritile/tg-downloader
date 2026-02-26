@@ -274,7 +274,7 @@ func (r *userRepository) GetAll(ctx context.Context, limit, offset int) ([]*mode
 		var user models.User
 		var canYoutube, canInstagram, canTiktok sql.NullBool
 		var dailyLimit, monthlyLimit sql.NullInt32
-		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canTiktok, &dailyLimit, &monthlyLimit, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canInstagram, &canTiktok, &dailyLimit, &monthlyLimit, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		if canYoutube.Valid {
@@ -318,7 +318,7 @@ func (r *userRepository) SearchByTelegramID(ctx context.Context, telegramID int6
 		var user models.User
 		var canYoutube, canInstagram, canTiktok sql.NullBool
 		var dailyLimit, monthlyLimit sql.NullInt32
-		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canTiktok, &dailyLimit, &monthlyLimit, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canInstagram, &canTiktok, &dailyLimit, &monthlyLimit, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if canYoutube.Valid {
