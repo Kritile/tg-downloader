@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+
 	"github.com/mediaharvester/tg-downloader/shared/models"
 )
 
@@ -10,6 +11,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *models.User) error
 	Update(ctx context.Context, user *models.User) error
 	GetOrCreate(ctx context.Context, telegramID int64, username string) (*models.User, error)
+	UpdateAutoBestDownload(ctx context.Context, userID int64, autoBest *bool) error
 }
 
 type DownloadRepository interface {

@@ -38,25 +38,23 @@ func (s *downloaderService) Download(ctx context.Context, url string, destPath s
 	// Generate output template
 	outputTemplate := filepath.Join(s.downloadPath, destPath, "%(id)s.%(ext)s")
 
-	// Check if it's a TikTok URL
+	// Check if it's a TikTok or Instagram Reels URL
 	isTikTok := strings.Contains(url, "tiktok.com") || strings.Contains(url, "vt.tiktok.com") || strings.Contains(url, "vm.tiktok.com")
+	isReels := strings.Contains(url, "instagram.com/reel") || strings.Contains(url, "instagram.com/reels")
 
-	// Build yt-dlp command with TikTok-specific options
 	var args []string
-	if isTikTok {
-		// TikTok needs more flexible format selection and impersonation
+	if isTikTok || isReels {
 		args = []string{
-			"--format", "best", // Use best available format for TikTok
+			"--format", "best",
 			"--output", outputTemplate,
-			"--no-playlist", // Don't download playlists
-			"--impersonate", "chrome:120", // Use Chrome 120 impersonation via curl-cffi
+			"--no-playlist",
+			"--impersonate", "chrome:120",
 		}
 	} else {
-		// YouTube and other sites
 		args = []string{
-			"--format", "best[height<=720]/best", // Limit quality to reduce file size
+			"--format", "best[height<=720]/best",
 			"--output", outputTemplate,
-			"--no-playlist", // Don't download playlists
+			"--no-playlist",
 		}
 	}
 
