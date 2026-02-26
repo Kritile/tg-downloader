@@ -211,7 +211,9 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, isTikTo
 	}
 
 	if isTikTok || isReels {
-		args = append(args, "--impersonate", "chrome:120")
+		// Avoid pinning a specific Chrome build since container images may ship
+		// different curl-cffi impersonation targets.
+		args = append(args, "--impersonate", "chrome")
 	}
 	args = append(args, url)
 	return args
