@@ -14,13 +14,14 @@ import (
 )
 
 type AdminServer struct {
-	engine       *gin.Engine
-	authService  domain.AdminUserService
-	userMgmtSvc  domain.AdminUserManagementService
-	statsSvc     domain.AdminStatsService
-	settingsRepo domain.SettingsRepository
-	baseTemplate *template.Template
-	funcMap      template.FuncMap
+	engine        *gin.Engine
+	authService   domain.AdminUserService
+	userMgmtSvc   domain.AdminUserManagementService
+	statsSvc      domain.AdminStatsService
+	settingsRepo  domain.SettingsRepository
+	baseTemplate  *template.Template
+	loginTemplate *template.Template
+	funcMap       template.FuncMap
 }
 
 func NewAdminServer(
@@ -44,17 +45,19 @@ func NewAdminServer(
 		"sub": func(a, b int) int { return a - b },
 	}
 
-	// Load base template
+	// Load templates
 	baseTemplate := template.Must(template.New("base.html").Funcs(funcMap).ParseFiles("/app/admin/templates/base.html"))
+	loginTemplate := template.Must(template.New("login.html").Funcs(funcMap).ParseFiles("/app/admin/templates/login.html"))
 
 	server := &AdminServer{
-		engine:       engine,
-		authService:  authService,
-		userMgmtSvc:  userMgmtSvc,
-		statsSvc:     statsSvc,
-		settingsRepo: settingsRepo,
-		baseTemplate: baseTemplate,
-		funcMap:      funcMap,
+		engine:        engine,
+		authService:   authService,
+		userMgmtSvc:   userMgmtSvc,
+		statsSvc:      statsSvc,
+		settingsRepo:  settingsRepo,
+		baseTemplate:  baseTemplate,
+		loginTemplate: loginTemplate,
+		funcMap:       funcMap,
 	}
 
 	server.setupRoutes()
@@ -144,9 +147,11 @@ func (s *AdminServer) authMiddleware() gin.HandlerFunc {
 }
 
 func (s *AdminServer) handleLoginGET(c *gin.Context) {
-	c.HTML(http.StatusOK, "login.html", gin.H{
+	if err := s.loginTemplate.Execute(c.Writer, gin.H{
 		"error": c.Query("error"),
-	})
+	}); err != nil {
+		c.String(http.StatusInternalServerError, "Login template error: %v", err)
+	}
 }
 
 func (s *AdminServer) handleLoginPOST(c *gin.Context) {
