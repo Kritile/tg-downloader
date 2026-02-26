@@ -93,7 +93,7 @@ func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H
 	data["title"] = title
 
 	// Add content to data
-	data["content"] = contentBuf.String()
+	data["content"] = template.HTML(contentBuf.String())
 
 	// Execute base template
 	if err := s.baseTemplate.Execute(c.Writer, data); err != nil {
@@ -133,7 +133,7 @@ func (s *AdminServer) authMiddleware() gin.HandlerFunc {
 		userID := session.Get("admin_id")
 
 		if userID == nil {
-			c.Redirect(http.StatusTemporaryRedirect, "/")
+			c.Redirect(http.StatusSeeOther, "/")
 			c.Abort()
 			return
 		}
@@ -155,7 +155,7 @@ func (s *AdminServer) handleLoginPOST(c *gin.Context) {
 
 	admin, err := s.authService.Authenticate(c.Request.Context(), username, password)
 	if err != nil {
-		c.Redirect(http.StatusTemporaryRedirect, "/?error=invalid_credentials")
+		c.Redirect(http.StatusSeeOther, "/?error=invalid_credentials")
 		return
 	}
 
@@ -164,7 +164,7 @@ func (s *AdminServer) handleLoginPOST(c *gin.Context) {
 	session.Set("admin_username", admin.Username)
 	session.Save()
 
-	c.Redirect(http.StatusTemporaryRedirect, "/dashboard")
+	c.Redirect(http.StatusSeeOther, "/dashboard")
 }
 
 func (s *AdminServer) handleLogout(c *gin.Context) {
@@ -172,7 +172,7 @@ func (s *AdminServer) handleLogout(c *gin.Context) {
 	session.Clear()
 	session.Save()
 
-	c.Redirect(http.StatusTemporaryRedirect, "/")
+	c.Redirect(http.StatusSeeOther, "/")
 }
 
 func (s *AdminServer) handleDashboard(c *gin.Context) {
@@ -183,10 +183,10 @@ func (s *AdminServer) handleDashboard(c *gin.Context) {
 	totalUsers, _ := s.statsSvc.GetTotalUsers(ctx)
 
 	s.renderPage(c, "dashboard.html", gin.H{
-		"downloads_today":    today,
-		"downloads_month":    month,
-		"total_users":        totalUsers,
-		"current_page":       "dashboard",
+		"downloads_today": today,
+		"downloads_month": month,
+		"total_users":     totalUsers,
+		"current_page":    "dashboard",
 	})
 }
 
@@ -223,17 +223,17 @@ func (s *AdminServer) handleUsers(c *gin.Context) {
 
 func (s *AdminServer) handleUserDetail(c *gin.Context) {
 	// TODO: Implement user detail page
-	c.Redirect(http.StatusTemporaryRedirect, "/users")
+	c.Redirect(http.StatusSeeOther, "/users")
 }
 
 func (s *AdminServer) handleUpdatePermissions(c *gin.Context) {
 	// TODO: Implement
-	c.Redirect(http.StatusTemporaryRedirect, "/users")
+	c.Redirect(http.StatusSeeOther, "/users")
 }
 
 func (s *AdminServer) handleUpdateLimits(c *gin.Context) {
 	// TODO: Implement
-	c.Redirect(http.StatusTemporaryRedirect, "/users")
+	c.Redirect(http.StatusSeeOther, "/users")
 }
 
 func (s *AdminServer) handleSettings(c *gin.Context) {
@@ -255,7 +255,7 @@ func (s *AdminServer) handleSettingsUpdate(c *gin.Context) {
 
 	settings, err := s.settingsRepo.Get(ctx)
 	if err != nil {
-		c.Redirect(http.StatusTemporaryRedirect, "/settings")
+		c.Redirect(http.StatusSeeOther, "/settings")
 		return
 	}
 
@@ -271,11 +271,11 @@ func (s *AdminServer) handleSettingsUpdate(c *gin.Context) {
 
 	err = s.settingsRepo.Update(ctx, settings)
 	if err != nil {
-		c.Redirect(http.StatusTemporaryRedirect, "/settings?error=update_failed")
+		c.Redirect(http.StatusSeeOther, "/settings?error=update_failed")
 		return
 	}
 
-	c.Redirect(http.StatusTemporaryRedirect, "/settings?success=1")
+	c.Redirect(http.StatusSeeOther, "/settings?success=1")
 }
 
 func (s *AdminServer) handleStats(c *gin.Context) {
@@ -286,11 +286,11 @@ func (s *AdminServer) handleStats(c *gin.Context) {
 	topUsers, topCounts, _ := s.statsSvc.GetTopUsers(ctx, 10)
 
 	s.renderPage(c, "stats.html", gin.H{
-		"downloads_today":  today,
-		"downloads_month":  month,
-		"top_users":        topUsers,
-		"top_counts":       topCounts,
-		"current_page":     "stats",
+		"downloads_today": today,
+		"downloads_month": month,
+		"top_users":       topUsers,
+		"top_counts":      topCounts,
+		"current_page":    "stats",
 	})
 }
 
