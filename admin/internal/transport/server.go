@@ -93,7 +93,7 @@ func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H
 	data["title"] = title
 
 	// Add content to data
-	data["content"] = contentBuf.String()
+	data["content"] = template.HTML(contentBuf.String())
 
 	// Execute base template
 	if err := s.baseTemplate.Execute(c.Writer, data); err != nil {
