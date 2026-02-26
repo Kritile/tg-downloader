@@ -203,7 +203,7 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, isTikTo
 	} else {
 		// Default format selection
 		if isTikTok || isReels {
-			args = append(args, "--format", "best")
+			args = append(args, "--format", "b")
 		} else {
 			// YouTube and others - prefer 720p or lower to stay under Telegram limit
 			args = append(args, "--format", "best[height<=720]/best")

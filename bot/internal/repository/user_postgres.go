@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/mediaharvester/tg-downloader/bot/internal/domain"
@@ -41,6 +42,26 @@ func (r *userRepository) GetByTelegramID(ctx context.Context, telegramID int64) 
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
+
+	if err != nil && strings.Contains(err.Error(), "can_instagram") {
+		legacyQuery := `
+			SELECT id, telegram_id, username, can_youtube, can_tiktok, daily_limit, monthly_limit, auto_best_download, created_at, updated_at
+			FROM users
+			WHERE telegram_id = $1
+		`
+		err = r.db.QueryRowContext(ctx, legacyQuery, telegramID).Scan(
+			&user.ID,
+			&user.TelegramID,
+			&user.Username,
+			&canYoutube,
+			&canTiktok,
+			&dailyLimit,
+			&monthlyLimit,
+			&autoBest,
+			&user.CreatedAt,
+			&user.UpdatedAt,
+		)
+	}
 
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrUserNotFound
@@ -133,6 +154,23 @@ func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 		autoBest,
 		now,
 	)
+	if err != nil && strings.Contains(err.Error(), "can_instagram") {
+		legacyQuery := `
+			UPDATE users
+			SET username = $2, can_youtube = $3, can_tiktok = $4, daily_limit = $5, monthly_limit = $6, auto_best_download = $7, updated_at = $8
+			WHERE id = $1
+		`
+		_, err = r.db.ExecContext(ctx, legacyQuery,
+			user.ID,
+			user.Username,
+			canYoutube,
+			canTiktok,
+			dailyLimit,
+			monthlyLimit,
+			autoBest,
+			now,
+		)
+	}
 
 	return err
 }

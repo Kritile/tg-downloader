@@ -45,10 +45,9 @@ func (s *downloaderService) Download(ctx context.Context, url string, destPath s
 	var args []string
 	if isTikTok || isReels {
 		args = []string{
-			"--format", "best",
+			"--format", "b",
 			"--output", outputTemplate,
 			"--no-playlist",
-			"--impersonate", "chrome:120",
 		}
 	} else {
 		args = []string{
