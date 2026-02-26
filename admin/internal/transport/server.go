@@ -127,6 +127,8 @@ func (s *AdminServer) verifyCSRF(c *gin.Context) bool {
 }
 
 func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H) {
+	data["csrf_token"] = s.ensureCSRFToken(c)
+
 	contentTemplate, err := template.New(templateName).Funcs(s.funcMap).ParseFiles("/app/admin/templates/" + templateName)
 	if err != nil {
 		c.String(http.StatusInternalServerError, "Template error: %v", err)
@@ -152,7 +154,6 @@ func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H
 	}
 	data["title"] = title
 	data["content"] = template.HTML(contentBuf.String())
-	data["csrf_token"] = s.ensureCSRFToken(c)
 
 	if err := s.baseTemplate.Execute(c.Writer, data); err != nil {
 		c.String(http.StatusInternalServerError, "Base template error: %v", err)
