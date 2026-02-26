@@ -37,3 +37,7 @@ func (s *adminStatsService) GetTopUsers(ctx context.Context, limit int) ([]*mode
 func (s *adminStatsService) GetTotalUsers(ctx context.Context) (int, error) {
 	return s.downloadRepo.GetTotalUsers(ctx)
 }
+
+func (s *adminStatsService) GetDownloadsBySource(ctx context.Context) (map[string]int, error) {
+	return s.downloadRepo.GetDownloadsBySource(ctx)
+}

@@ -10,6 +10,12 @@
     <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">Active Users</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ .total_users }}</p></div>
 </div>
 
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">YouTube Downloads</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ index .downloads_source "youtube" }}</p></div>
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">Instagram Reels Downloads</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ index .downloads_source "reels" }}</p></div>
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">TikTok Downloads</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ index .downloads_source "tiktok" }}</p></div>
+</div>
+
 <div class="bg-white rounded-lg shadow p-6">
     <h3 class="text-xl font-bold text-gray-800 mb-4">Top 10 Users (month)</h3>
     <table class="min-w-full divide-y divide-gray-200">
@@ -25,12 +31,12 @@
             {{ range $index, $user := .top_users }}
             <tr>
                 <td class="px-6 py-4 text-sm text-gray-700">{{ add $index 1 }}</td>
-                <td class="px-6 py-4 text-sm text-gray-900">{{ $user.TelegramID }}</td>
-                <td class="px-6 py-4 text-sm text-gray-900">{{ $user.Username }}</td>
-                <td class="px-6 py-4 text-sm text-gray-900">{{ index $.top_counts $index }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ $user.TelegramID }}</td>
+                <td class="px-6 py-4 text-sm text-gray-700">{{ if $user.Username }}{{ $user.Username }}{{ else }}-{{ end }}</td>
+                <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ index $.top_counts $index }}</td>
             </tr>
             {{ else }}
-            <tr><td colspan="4" class="px-6 py-6 text-center text-gray-500">No data yet</td></tr>
+            <tr><td colspan="4" class="px-6 py-8 text-center text-gray-500">No data for this month</td></tr>
             {{ end }}
         </tbody>
     </table>

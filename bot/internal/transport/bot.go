@@ -249,6 +249,12 @@ func (b *Bot) handleURL(ctx context.Context, message *tgbotapi.Message, text str
 		return
 	}
 
+	if source == models.SourceReels {
+		b.sendMessage(message.Chat.ID, "⬇️ Instagram Reels always downloads in best quality... Please wait.")
+		b.queueDownload(ctx, message.Chat.ID, user.ID, text, string(source), "")
+		return
+	}
+
 	if user.AutoBestDownload != nil && *user.AutoBestDownload {
 		b.sendMessage(message.Chat.ID, "⬇️ Downloading with best quality... Please wait.")
 		b.queueDownload(ctx, message.Chat.ID, user.ID, text, string(source), "")
