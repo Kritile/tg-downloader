@@ -6,15 +6,15 @@ import (
 )
 
 type Config struct {
-	BotToken                string
-	DatabaseURL             string
-	RedisURL                string
-	GlobalDefaultDailyLimit int
+	BotToken                  string
+	DatabaseURL               string
+	RedisURL                  string
+	GlobalDefaultDailyLimit   int
 	GlobalDefaultMonthlyLimit int
-	WorkerCount             int
-	AdminPort               string
-	SessionSecret           string
-	XraySocks5Proxy         string
+	WorkerCount               int
+	AdminPort                 string
+	SessionSecret             string
+	XraySocks5Proxy           string
 }
 
 func Load() *Config {
@@ -24,6 +24,7 @@ func Load() *Config {
 		RedisURL:      os.Getenv("REDIS_URL"),
 		AdminPort:     getEnvOrDefault("ADMIN_PORT", "8080"),
 		SessionSecret: os.Getenv("SESSION_SECRET"),
+		// Shared SOCKS5 proxy used for yt-dlp traffic and all Telegram Bot API requests.
 		XraySocks5Proxy: os.Getenv("XRAY_SOCKS5_PROXY"),
 	}
 

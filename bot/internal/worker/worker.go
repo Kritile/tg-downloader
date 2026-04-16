@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mediaharvester/tg-downloader/bot/internal/domain"
+	"github.com/mediaharvester/tg-downloader/shared/config"
 	"github.com/mediaharvester/tg-downloader/shared/models"
 )
 
@@ -20,11 +21,11 @@ const (
 )
 
 type WorkerPool struct {
-	queueService   *QueueService
-	bot            domain.Notifier
-	workerCount    int
-	downloadRepo   domain.DownloadRepository
-	proxyAddr      string
+	queueService *QueueService
+	bot          domain.Notifier
+	workerCount  int
+	downloadRepo domain.DownloadRepository
+	proxyAddr    string
 }
 
 func NewWorkerPool(
@@ -35,11 +36,11 @@ func NewWorkerPool(
 	proxyAddr string,
 ) *WorkerPool {
 	return &WorkerPool{
-		queueService:   queueService,
-		bot:            bot,
-		workerCount:    workerCount,
-		downloadRepo:   downloadRepo,
-		proxyAddr:      proxyAddr,
+		queueService: queueService,
+		bot:          bot,
+		workerCount:  workerCount,
+		downloadRepo: downloadRepo,
+		proxyAddr:    proxyAddr,
 	}
 }
 
@@ -112,9 +113,9 @@ func (wp *WorkerPool) processWithRetry(ctx context.Context, job *models.Download
 		lastErr = err
 
 		// Don't retry on certain errors
-		if err == domain.ErrPermissionDenied || 
-		   err == domain.ErrDailyLimitExceeded || 
-		   err == domain.ErrMonthlyLimitExceeded {
+		if err == domain.ErrPermissionDenied ||
+			err == domain.ErrDailyLimitExceeded ||
+			err == domain.ErrMonthlyLimitExceeded {
 			return err
 		}
 	}
@@ -139,9 +140,17 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	isYouTube := job.Source == string(models.SourceYoutube)
 	isTikTok := job.Source == string(models.SourceTiktok)
 	useProxy := isYouTube || isTikTok
+	proxyURL := ""
+	if useProxy && wp.proxyAddr != "" {
+		var err error
+		proxyURL, err = config.NormalizeSocks5Proxy(wp.proxyAddr)
+		if err != nil {
+			return fmt.Errorf("invalid XRAY_SOCKS5_PROXY: %w", err)
+		}
+	}
 
 	// Build yt-dlp command
-	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, useProxy, isTikTok)
+	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, proxyURL, isTikTok)
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
@@ -186,16 +195,15 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 }
 
 // buildYtDlpArgs builds yt-dlp command arguments
-func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format string, useProxy, isTikTok bool) []string {
+func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL string, isTikTok bool) []string {
 	args := []string{
 		"--no-playlist", // Don't download playlists
 		"--output", outputTemplate,
 	}
 
 	// Add proxy for YouTube and TikTok
-	if useProxy && wp.proxyAddr != "" {
-		// proxyAddr format: "user:pass@host:port" or "host:port"
-		args = append(args, "--proxy", "socks5://"+wp.proxyAddr)
+	if proxyURL != "" {
+		args = append(args, "--proxy", proxyURL)
 	}
 
 	// Add format selection
@@ -274,7 +282,7 @@ func CleanupDownloadedFile(filePath string) {
 		return
 	}
 	os.Remove(filePath)
-	
+
 	// Try to remove the parent directory if empty
 	dir := filepath.Dir(filePath)
 	os.Remove(dir) // Ignore errors

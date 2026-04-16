@@ -10,14 +10,13 @@ import (
 	"syscall"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	_ "github.com/lib/pq"
 	"github.com/mediaharvester/tg-downloader/bot/internal/repository"
 	"github.com/mediaharvester/tg-downloader/bot/internal/transport"
 	"github.com/mediaharvester/tg-downloader/bot/internal/usecase"
 	"github.com/mediaharvester/tg-downloader/bot/internal/worker"
 	"github.com/mediaharvester/tg-downloader/shared/config"
 	"github.com/redis/go-redis/v9"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -49,7 +48,7 @@ func main() {
 	defer redisClient.Close()
 
 	// Initialize Telegram bot
-	botAPI, err := tgbotapi.NewBotAPI(cfg.BotToken)
+	botAPI, err := initTelegramBotAPI(cfg.BotToken, cfg.XraySocks5Proxy)
 	if err != nil {
 		log.Fatalf("Failed to initialize bot: %v", err)
 	}

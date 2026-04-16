@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/mediaharvester/tg-downloader/bot/internal/domain"
+	"github.com/mediaharvester/tg-downloader/shared/config"
 	"github.com/mediaharvester/tg-downloader/shared/models"
 )
 
@@ -47,8 +48,11 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 	// Add proxy for YouTube and TikTok
 	useProxy := source == models.SourceYoutube || source == models.SourceTiktok
 	if useProxy && s.proxyAddr != "" {
-		// proxyAddr format: "user:pass@host:port" or "host:port"
-		args = append(args, "--proxy", "socks5://"+s.proxyAddr)
+		proxyURL, err := config.NormalizeSocks5Proxy(s.proxyAddr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid XRAY_SOCKS5_PROXY: %w", err)
+		}
+		args = append(args, "--proxy", proxyURL)
 	}
 
 	// Add TikTok-specific options (no impersonation - relies on proxy)

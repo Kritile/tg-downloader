@@ -6,7 +6,7 @@ import (
 
 func TestBuildYtDlpArgs(t *testing.T) {
 	wp := &WorkerPool{
-		proxyAddr: "xray-client:10808",
+		proxyAddr: "socks5://xray-client:10808",
 	}
 
 	t.Run("YouTube with proxy and format", func(t *testing.T) {
@@ -14,7 +14,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"22",
-			true,  // useProxy
+			"socks5://xray-client:10808",
 			false, // isTikTok
 		)
 
@@ -65,27 +65,20 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://tiktok.com/@user/video/test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			true,  // useProxy
-			true,  // isTikTok
+			"socks5://xray-client:10808",
+			true, // isTikTok
 		)
 
 		hasProxy := false
-		hasImpersonate := false
 
 		for i, arg := range args {
 			if arg == "--proxy" && i+1 < len(args) && args[i+1] == "socks5://xray-client:10808" {
 				hasProxy = true
 			}
-			if arg == "--impersonate" && i+1 < len(args) && args[i+1] == "chrome:120" {
-				hasImpersonate = true
-			}
 		}
 
 		if !hasProxy {
 			t.Error("expected proxy argument for TikTok")
-		}
-		if !hasImpersonate {
-			t.Error("expected --impersonate for TikTok")
 		}
 	})
 
@@ -95,7 +88,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			false, // useProxy
+			"",
 			false, // isTikTok
 		)
 
@@ -112,30 +105,23 @@ func TestBuildYtDlpArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("TikTok with impersonate", func(t *testing.T) {
+	t.Run("TikTok default format", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://tiktok.com/@user/video/test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			true,  // useProxy
-			true,  // isTikTok
+			"socks5://xray-client:10808",
+			true, // isTikTok
 		)
 
-		hasImpersonate := false
 		hasBestFormat := false
 
 		for i, arg := range args {
-			if arg == "--impersonate" && i+1 < len(args) && args[i+1] == "chrome:120" {
-				hasImpersonate = true
-			}
 			if arg == "--format" && i+1 < len(args) && args[i+1] == "best" {
 				hasBestFormat = true
 			}
 		}
 
-		if !hasImpersonate {
-			t.Error("expected --impersonate for TikTok")
-		}
 		if !hasBestFormat {
 			t.Error("expected best format for TikTok")
 		}
@@ -146,7 +132,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
-			true,  // useProxy
+			"socks5://xray-client:10808",
 			false, // isTikTok
 		)
 
@@ -168,7 +154,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"137+140",
-			true,  // useProxy
+			"socks5://xray-client:10808",
 			false, // isTikTok
 		)
 
@@ -188,9 +174,9 @@ func TestBuildYtDlpArgs(t *testing.T) {
 
 func TestWorkerPool_ProxyAddr(t *testing.T) {
 	t.Run("proxy address is set", func(t *testing.T) {
-		wp := NewWorkerPool(nil, nil, 3, nil, "xray-client:10808")
-		if wp.proxyAddr != "xray-client:10808" {
-			t.Errorf("expected proxyAddr xray-client:10808, got %s", wp.proxyAddr)
+		wp := NewWorkerPool(nil, nil, 3, nil, "socks5://xray-client:10808")
+		if wp.proxyAddr != "socks5://xray-client:10808" {
+			t.Errorf("expected proxyAddr socks5://xray-client:10808, got %s", wp.proxyAddr)
 		}
 	})
 
