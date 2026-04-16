@@ -16,6 +16,7 @@ type VideoSource string
 const (
 	SourceYoutube VideoSource = "youtube"
 	SourceTiktok  VideoSource = "tiktok"
+	SourceReels   VideoSource = "reels"
 	SourceUnknown VideoSource = "unknown"
 )
 
@@ -35,12 +36,12 @@ const MaxTelegramFileSize = 50 * 1024 * 1024
 
 // VideoFormat represents a video format option
 type VideoFormat struct {
-	ID          string `json:"id"`
-	FormatID    string `json:"format_id"`
-	Extension   string `json:"extension"`
-	Resolution  string `json:"resolution"`
-	FileSize    int64  `json:"file_size,omitempty"`
-	TBR         float64`json:"tbr,omitempty"` // Total bitrate in kbps
-	FormatNote  string `json:"format_note,omitempty"`
-	DisplayName string `json:"display_name"`
+	ID          string  `json:"id"`
+	FormatID    string  `json:"format_id"`
+	Extension   string  `json:"extension"`
+	Resolution  string  `json:"resolution"`
+	FileSize    int64   `json:"file_size,omitempty"`
+	TBR         float64 `json:"tbr,omitempty"` // Total bitrate in kbps
+	FormatNote  string  `json:"format_note,omitempty"`
+	DisplayName string  `json:"display_name"`
 }

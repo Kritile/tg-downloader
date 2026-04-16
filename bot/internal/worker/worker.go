@@ -136,10 +136,11 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	// Generate output template
 	outputTemplate := filepath.Join(fullPath, "%(id)s.%(ext)s")
 
-	// Determine if we need to use proxy (YouTube and TikTok)
+	// Determine source-specific behavior
 	isYouTube := job.Source == string(models.SourceYoutube)
 	isTikTok := job.Source == string(models.SourceTiktok)
-	useProxy := isYouTube || isTikTok
+	isReels := job.Source == string(models.SourceReels)
+	useProxy := isYouTube || isTikTok || isReels
 	proxyURL := ""
 	if useProxy && wp.proxyAddr != "" {
 		var err error
@@ -150,7 +151,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	}
 
 	// Build yt-dlp command
-	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, proxyURL, isTikTok)
+	args := wp.buildYtDlpArgs(job.URL, outputTemplate, job.Format, proxyURL, isTikTok, isReels)
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
@@ -195,13 +196,12 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 }
 
 // buildYtDlpArgs builds yt-dlp command arguments
-func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL string, isTikTok bool) []string {
+func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL string, isTikTok, isReels bool) []string {
 	args := []string{
 		"--no-playlist", // Don't download playlists
 		"--output", outputTemplate,
 	}
 
-	// Add proxy for YouTube and TikTok
 	if proxyURL != "" {
 		args = append(args, "--proxy", proxyURL)
 	}
@@ -211,16 +211,19 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL strin
 		args = append(args, "--format", format)
 	} else {
 		// Default format selection
-		if isTikTok {
-			// TikTok needs more flexible format selection
-			// No impersonation - relies on proxy for geo-unblocking
-			args = append(args, "--format", "best")
+		if isTikTok || isReels {
+			args = append(args, "--format", "b")
 		} else {
 			// YouTube and others - prefer 720p or lower to stay under Telegram limit
 			args = append(args, "--format", "best[height<=720]/best")
 		}
 	}
 
+	if isTikTok || isReels {
+		// Avoid pinning a specific Chrome build since container images may ship
+		// different curl-cffi impersonation targets.
+		args = append(args, "--impersonate", "chrome")
+	}
 	args = append(args, url)
 	return args
 }

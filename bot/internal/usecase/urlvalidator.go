@@ -33,6 +33,11 @@ func (v *urlValidator) ValidateAndDetectSource(inputURL string) (models.VideoSou
 		return models.SourceTiktok, nil
 	}
 
+	// Check for Instagram Reels
+	if isInstagramReels(host, parsedURL.Path) {
+		return models.SourceReels, nil
+	}
+
 	return models.SourceUnknown, domain.ErrUnsupportedSource
 }
 
@@ -76,6 +81,28 @@ func isTikTok(host string) bool {
 	return false
 }
 
+func isInstagramReels(host, path string) bool {
+	instagramDomains := []string{
+		"instagram.com",
+		"www.instagram.com",
+		"m.instagram.com",
+	}
+
+	isInstagramHost := false
+	for _, domain := range instagramDomains {
+		if host == domain {
+			isInstagramHost = true
+			break
+		}
+	}
+	if !isInstagramHost {
+		return false
+	}
+
+	path = strings.ToLower(path)
+	return strings.HasPrefix(path, "/reel/") || strings.HasPrefix(path, "/reels/")
+}
+
 // ExtractVideoID extracts video ID from URL if possible
 func ExtractVideoID(inputURL string) string {
 	parsedURL, err := url.Parse(inputURL)
@@ -98,12 +125,19 @@ func ExtractVideoID(inputURL string) string {
 
 	// TikTok
 	if strings.Contains(host, "tiktok.com") {
-		// TikTok URLs: tiktok.com/@user/video/VIDEO_ID
 		parts := strings.Split(parsedURL.Path, "/")
 		for i, part := range parts {
 			if part == "video" && i+1 < len(parts) {
 				return parts[i+1]
 			}
+		}
+	}
+
+	// Instagram Reels
+	if strings.Contains(host, "instagram.com") {
+		parts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+		if len(parts) >= 2 && (parts[0] == "reel" || parts[0] == "reels") {
+			return parts[1]
 		}
 	}
 

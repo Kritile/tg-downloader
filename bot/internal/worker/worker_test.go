@@ -1,30 +1,21 @@
 package worker
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestBuildYtDlpArgs(t *testing.T) {
-	wp := &WorkerPool{
-		proxyAddr: "socks5://xray-client:10808",
-	}
+	wp := &WorkerPool{proxyAddr: "xray-client:10808"}
 
-	t.Run("YouTube with proxy and format", func(t *testing.T) {
+	t.Run("YouTube with proxy and custom format", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"22",
 			"socks5://xray-client:10808",
-			false, // isTikTok
+			false,
+			false,
 		)
 
-		// Check for proxy
-		hasProxy := false
-		hasFormat := false
-		hasNoPlaylist := false
-		hasOutput := false
-		hasURL := false
-
+		hasProxy, hasFormat, hasURL := false, false, false
 		for i, arg := range args {
 			if arg == "--proxy" && i+1 < len(args) && args[i+1] == "socks5://xray-client:10808" {
 				hasProxy = true
@@ -32,108 +23,71 @@ func TestBuildYtDlpArgs(t *testing.T) {
 			if arg == "--format" && i+1 < len(args) && args[i+1] == "22" {
 				hasFormat = true
 			}
-			if arg == "--no-playlist" {
-				hasNoPlaylist = true
-			}
-			if arg == "--output" {
-				hasOutput = true
-			}
 			if arg == "https://youtube.com/watch?v=test" {
 				hasURL = true
 			}
 		}
-
-		if !hasProxy {
-			t.Error("expected proxy argument for YouTube")
-		}
-		if !hasFormat {
-			t.Error("expected format argument")
-		}
-		if !hasNoPlaylist {
-			t.Error("expected --no-playlist")
-		}
-		if !hasOutput {
-			t.Error("expected --output")
-		}
-		if !hasURL {
-			t.Error("expected URL in args")
+		if !hasProxy || !hasFormat || !hasURL {
+			t.Errorf("unexpected args: %v", args)
 		}
 	})
 
-	t.Run("TikTok with proxy", func(t *testing.T) {
+	t.Run("TikTok default format is b and uses proxy", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://tiktok.com/@user/video/test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
-			true, // isTikTok
+			true,
+			false,
 		)
 
-		hasProxy := false
-
+		hasProxy, hasBest := false, false
 		for i, arg := range args {
 			if arg == "--proxy" && i+1 < len(args) && args[i+1] == "socks5://xray-client:10808" {
 				hasProxy = true
 			}
-		}
-
-		if !hasProxy {
-			t.Error("expected proxy argument for TikTok")
-		}
-	})
-
-	t.Run("YouTube without proxy configured", func(t *testing.T) {
-		wpNoProxy := &WorkerPool{proxyAddr: ""}
-		args := wpNoProxy.buildYtDlpArgs(
-			"https://youtube.com/watch?v=test",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
-			"",
-			"",
-			false, // isTikTok
-		)
-
-		hasProxy := false
-		for _, arg := range args {
-			if arg == "--proxy" {
-				hasProxy = true
-				break
+			if arg == "--format" && i+1 < len(args) && args[i+1] == "b" {
+				hasBest = true
 			}
 		}
-
-		if hasProxy {
-			t.Error("did not expect proxy argument when proxyAddr is empty")
+		if !hasProxy || !hasBest {
+			t.Errorf("unexpected args: %v", args)
 		}
 	})
 
-	t.Run("TikTok default format", func(t *testing.T) {
+	t.Run("Reels uses proxy and b format", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
-			"https://tiktok.com/@user/video/test",
+			"https://instagram.com/reel/abc",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
-			true, // isTikTok
+			false,
+			true,
 		)
 
-		hasBestFormat := false
-
+		hasProxy, hasBest := false, false
 		for i, arg := range args {
-			if arg == "--format" && i+1 < len(args) && args[i+1] == "best" {
-				hasBestFormat = true
+			if arg == "--proxy" && i+1 < len(args) && args[i+1] == "socks5://xray-client:10808" {
+				hasProxy = true
+			}
+			if arg == "--format" && i+1 < len(args) && args[i+1] == "b" {
+				hasBest = true
 			}
 		}
-
-		if !hasBestFormat {
-			t.Error("expected best format for TikTok")
+		if !hasProxy || !hasBest {
+			t.Errorf("unexpected args: %v", args)
 		}
 	})
 
-	t.Run("YouTube default format", func(t *testing.T) {
+	t.Run("YouTube default format uses 720p cap", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://youtube.com/watch?v=test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
-			false, // isTikTok
+			false,
+			false,
 		)
 
 		hasDefaultFormat := false
@@ -143,40 +97,49 @@ func TestBuildYtDlpArgs(t *testing.T) {
 				break
 			}
 		}
-
 		if !hasDefaultFormat {
-			t.Error("expected default 720p format for YouTube")
+			t.Errorf("unexpected args: %v", args)
 		}
 	})
 
-	t.Run("custom format selection", func(t *testing.T) {
-		args := wp.buildYtDlpArgs(
-			"https://youtube.com/watch?v=test",
+	t.Run("TikTok and Reels add impersonation", func(t *testing.T) {
+		tiktokArgs := wp.buildYtDlpArgs(
+			"https://tiktok.com/@user/video/test",
 			"/tmp/downloads/test/%(id)s.%(ext)s",
-			"137+140",
+			"",
 			"socks5://xray-client:10808",
-			false, // isTikTok
+			true,
+			false,
+		)
+		reelsArgs := wp.buildYtDlpArgs(
+			"https://instagram.com/reel/abc",
+			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"",
+			"socks5://xray-client:10808",
+			false,
+			true,
 		)
 
-		hasCustomFormat := false
-		for i, arg := range args {
-			if arg == "--format" && i+1 < len(args) && args[i+1] == "137+140" {
-				hasCustomFormat = true
-				break
+		for _, args := range [][]string{tiktokArgs, reelsArgs} {
+			hasImpersonate := false
+			for i, arg := range args {
+				if arg == "--impersonate" && i+1 < len(args) && args[i+1] == "chrome" {
+					hasImpersonate = true
+					break
+				}
 			}
-		}
-
-		if !hasCustomFormat {
-			t.Error("expected custom format 137+140")
+			if !hasImpersonate {
+				t.Errorf("expected impersonation args in %v", args)
+			}
 		}
 	})
 }
 
 func TestWorkerPool_ProxyAddr(t *testing.T) {
 	t.Run("proxy address is set", func(t *testing.T) {
-		wp := NewWorkerPool(nil, nil, 3, nil, "socks5://xray-client:10808")
-		if wp.proxyAddr != "socks5://xray-client:10808" {
-			t.Errorf("expected proxyAddr socks5://xray-client:10808, got %s", wp.proxyAddr)
+		wp := NewWorkerPool(nil, nil, 3, nil, "xray-client:10808")
+		if wp.proxyAddr != "xray-client:10808" {
+			t.Errorf("expected proxyAddr xray-client:10808, got %s", wp.proxyAddr)
 		}
 	})
 

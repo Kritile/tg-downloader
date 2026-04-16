@@ -4,59 +4,24 @@
     <p class="text-gray-600 mt-2">Overview of your MediaHarvester bot</p>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-    <!-- Downloads Today -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Downloads Today</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2">{{ .downloads_today }}</p>
-            </div>
-            <div class="bg-blue-100 rounded-full p-3">
-                <span class="text-2xl">📥</span>
-            </div>
-        </div>
-    </div>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">Downloads Today</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ .downloads_today }}</p></div>
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">Downloads This Month</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ .downloads_month }}</p></div>
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">Total Users</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ .total_users }}</p></div>
+    <div class="bg-white rounded-lg shadow p-6"><p class="text-gray-500 text-sm font-medium">Avg per User / Month</p><p class="text-3xl font-bold text-gray-800 mt-2">{{ printf "%.2f" .avg_per_user }}</p></div>
+</div>
 
-    <!-- Downloads This Month -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Downloads This Month</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2">{{ .downloads_month }}</p>
-            </div>
-            <div class="bg-green-100 rounded-full p-3">
-                <span class="text-2xl">📊</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Total Users -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between">
-            <div>
-                <p class="text-gray-500 text-sm font-medium">Total Users</p>
-                <p class="text-3xl font-bold text-gray-800 mt-2">{{ .total_users }}</p>
-            </div>
-            <div class="bg-purple-100 rounded-full p-3">
-                <span class="text-2xl">👥</span>
-            </div>
-        </div>
-    </div>
+<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+    <h3 class="font-semibold text-blue-900">Security status</h3>
+    <p class="text-blue-800 text-sm mt-1">{{ .security_posture }}</p>
 </div>
 
 <div class="bg-white rounded-lg shadow p-6">
     <h3 class="text-xl font-bold text-gray-800 mb-4">Quick Actions</h3>
     <div class="flex space-x-4">
-        <a href="/users" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition">
-            Manage Users
-        </a>
-        <a href="/settings" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition">
-            Global Settings
-        </a>
-        <a href="/stats" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition">
-            View Statistics
-        </a>
+        <a href="/users" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition">Manage Users</a>
+        <a href="/settings" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition">Global Settings</a>
+        <a href="/stats" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition">View Statistics</a>
     </div>
 </div>
 {{ end }}

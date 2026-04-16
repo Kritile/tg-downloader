@@ -21,6 +21,9 @@ func (s *permissionService) CheckPermission(ctx context.Context, user *models.Us
 	if user.CanYoutube != nil && source == models.SourceYoutube {
 		return *user.CanYoutube, nil
 	}
+	if user.CanInstagram != nil && source == models.SourceReels {
+		return *user.CanInstagram, nil
+	}
 	if user.CanTiktok != nil && source == models.SourceTiktok {
 		return *user.CanTiktok, nil
 	}
@@ -34,6 +37,8 @@ func (s *permissionService) CheckPermission(ctx context.Context, user *models.Us
 	switch source {
 	case models.SourceYoutube:
 		return settings.DefaultYoutubeAllowed, nil
+	case models.SourceReels:
+		return settings.DefaultInstagramAllowed, nil
 	case models.SourceTiktok:
 		return settings.DefaultTiktokAllowed, nil
 	default:

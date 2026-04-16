@@ -134,3 +134,34 @@ func (r *downloadRepository) GetTotalUsers(ctx context.Context) (int, error) {
 	err := r.db.QueryRowContext(ctx, query).Scan(&count)
 	return count, err
 }
+
+func (r *downloadRepository) GetDownloadsBySource(ctx context.Context) (map[string]int, error) {
+	query := `
+		SELECT source, COUNT(*)
+		FROM downloads
+		GROUP BY source
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	stats := map[string]int{
+		"youtube": 0,
+		"reels":   0,
+		"tiktok":  0,
+	}
+
+	for rows.Next() {
+		var source string
+		var count int
+		if err := rows.Scan(&source, &count); err != nil {
+			return nil, err
+		}
+		stats[source] = count
+	}
+
+	return stats, rows.Err()
+}

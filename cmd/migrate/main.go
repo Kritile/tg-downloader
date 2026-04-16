@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ func main() {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
-	migrationsDir := flag.String("dir", "./migrations", "Directory containing migration files")
+	migrationsDir := flag.String("dir", "", "Directory containing migration files (optional)")
 	flag.Parse()
 
 	// Retry logic for database connection
@@ -52,24 +53,19 @@ func main() {
 	}
 	defer db.Close()
 
-	// Read and execute migration files
-	files, err := filepath.Glob(filepath.Join(*migrationsDir, "*.sql"))
+	resolvedDir, files, err := resolveMigrationFiles(*migrationsDir)
 	if err != nil {
-		log.Fatalf("Failed to read migrations directory: %v", err)
+		log.Fatal(err)
 	}
 
-	if len(files) == 0 {
-		log.Println("No migration files found")
-		return
-	}
-
-	// Sort files by name
-	sort.Strings(files)
-
-	// Execute each migration file
+	log.Printf("Using migrations directory: %s", resolvedDir)
+	log.Printf("Found %d migration files", len(files))
 	for _, file := range files {
-		// Skip down migration files
-		if filepath.Base(file) == "00001_initial_schema.down.sql" {
+		log.Printf(" - %s", filepath.Base(file))
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(filepath.Base(file), ".down.sql") {
 			continue
 		}
 
@@ -82,7 +78,6 @@ func main() {
 
 		_, err = db.Exec(string(content))
 		if err != nil {
-			// Check if it's a "already exists" error - if so, skip it
 			if strings.Contains(err.Error(), "already exists") {
 				log.Printf("Skipping migration %s: already applied", filepath.Base(file))
 				continue
@@ -94,4 +89,27 @@ func main() {
 	}
 
 	log.Println("All migrations completed successfully")
+}
+
+func resolveMigrationFiles(flagDir string) (string, []string, error) {
+	candidates := []string{}
+	if flagDir != "" {
+		candidates = append(candidates, flagDir)
+	} else {
+		candidates = append(candidates, "./migrations", "/app/migrations")
+	}
+
+	for _, dir := range candidates {
+		files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to read migrations directory %s: %w", dir, err)
+		}
+		if len(files) == 0 {
+			continue
+		}
+		sort.Strings(files)
+		return dir, files, nil
+	}
+
+	return "", nil, fmt.Errorf("no migration files found in: %s", strings.Join(candidates, ", "))
 }
