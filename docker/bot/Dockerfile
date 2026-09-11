@@ -4,6 +4,7 @@ FROM golang:1.22-bookworm
 RUN apt-get update && apt-get install -y \
     ffmpeg \
     curl \
+    git \
     python3-pip \
     python3-venv \
     libcurl4-openssl-dev \
@@ -12,7 +13,8 @@ RUN apt-get update && apt-get install -y \
 
 # Install latest yt-dlp via pip with impersonation support (curl-cffi)
 # curl-cffi provides browser impersonation for sites like TikTok
-RUN pip3 install --break-system-packages --no-cache-dir -U yt-dlp curl-cffi
+RUN pip3 install --break-system-packages --no-cache-dir -U \
+    "yt-dlp[default,curl-cffi] @ git+https://github.com/yt-dlp/yt-dlp.git"
 
 # Verify curl-cffi is installed correctly
 RUN python3 -c "from curl_cffi import requests; print('curl-cffi installed successfully')"
