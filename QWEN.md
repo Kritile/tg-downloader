@@ -21,8 +21,8 @@ With admin panel, per-user access control, Redis queue, containerized SOCKS5 VPN
 * Follow **Clean Architecture**.
 * No hardcoded secrets — use env variables.
 * Bot must **delete downloaded files immediately after sending**.
-* All **YouTube traffic** MUST go through **SOCKS5 Xray VPN container**.
-* TikTok traffic bypasses VPN.
+* Telegram API and all downloader traffic MUST go through the **SOCKS5 Xray VPN container**.
+* MAX API traffic, including inbound updates and outbound uploads, MUST use a direct connection.
 
 ---
 
@@ -97,8 +97,8 @@ volumes:
 ```
 
 * Xray SOCKS5 proxy listens on **0.0.0.0:10808** inside container
-* Bot routes **YouTube requests via proxy**
-* TikTok requests bypass VPN
+* Bot routes Telegram API and all yt-dlp requests via proxy
+* MAX API requests bypass VPN
 
 ---
 
@@ -270,4 +270,3 @@ cmd/
 * Files deleted after sending
 * Docker-compose runs all services cleanly
 * Tests pass
-

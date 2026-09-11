@@ -140,7 +140,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	isYouTube := job.Source == string(models.SourceYoutube)
 	isTikTok := job.Source == string(models.SourceTiktok)
 	isReels := job.Source == string(models.SourceReels)
-	useProxy := isYouTube
+	useProxy := isYouTube || isTikTok || isReels
 	proxyURL := ""
 	if useProxy && wp.proxyAddr != "" {
 		var err error
@@ -209,7 +209,7 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL strin
 		"--output", outputTemplate,
 	}
 
-	if proxyURL != "" && !isTikTok && !isReels {
+	if proxyURL != "" {
 		args = append(args, "--proxy", proxyURL)
 	}
 

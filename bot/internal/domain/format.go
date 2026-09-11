@@ -19,6 +19,6 @@ type FormatService interface {
 type FormatDownloader interface {
 	// DownloadWithFormat downloads video using specified format
 	DownloadWithFormat(ctx context.Context, url string, formatID string, destPath string, useProxy bool) (string, int64, error)
-	// ListFormatsWithProxy lists formats with optional proxy support
+	// ListFormatsWithProxy lists formats through the configured downloader proxy
 	ListFormatsWithProxy(ctx context.Context, url string, useProxy bool) ([]models.VideoFormat, error)
 }

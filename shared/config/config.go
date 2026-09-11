@@ -28,7 +28,7 @@ func Load() *Config {
 		RedisURL:       os.Getenv("REDIS_URL"),
 		AdminPort:      getEnvOrDefault("ADMIN_PORT", "8080"),
 		SessionSecret:  os.Getenv("SESSION_SECRET"),
-		// SOCKS5 proxy is used only by yt-dlp for sources that require it.
+		// SOCKS5 proxy is used by Telegram API and yt-dlp. MAX uses its own direct client.
 		XraySocks5Proxy: os.Getenv("XRAY_SOCKS5_PROXY"),
 	}
 

@@ -144,7 +144,7 @@ The bot can interact via Telegram and MAX:
 - Send `/start` to begin
 - Send a YouTube or TikTok URL to download
 
-Telegram requests use `TELEGRAM_API_URL`, intended for the internal Telegram Local Bot API server. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly. Xray is only passed to yt-dlp for YouTube downloads.
+Telegram requests use `TELEGRAM_API_URL` through the configured SOCKS5 Xray transport. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly without Xray. All yt-dlp downloads use Xray.
 
 ### Admin Panel
 

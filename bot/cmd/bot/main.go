@@ -66,7 +66,7 @@ func main() {
 	// Initialize bot
 	var telegramTransport *transport.TelegramTransport
 	if cfg.BotToken != "" {
-		botAPI, err := initTelegramBotAPILocal(cfg.BotToken, cfg.TelegramAPIURL)
+		botAPI, err := initTelegramBotAPILocal(cfg.BotToken, cfg.TelegramAPIURL, cfg.XraySocks5Proxy)
 		if err != nil {
 			log.Fatalf("Failed to initialize Telegram Local Bot API: %v", err)
 		}
@@ -80,7 +80,7 @@ func main() {
 			log.Fatalf("Failed to initialize MAX bot: %v", err)
 		}
 		maxTransport = transport.NewMaxTransport(maxAPI)
-		log.Println("MAX bot configured with direct API access")
+		log.Println("MAX bot configured with direct API access (no Xray)")
 	}
 
 	// Shared business workflow; platform transports only translate updates and API calls.

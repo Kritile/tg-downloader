@@ -32,7 +32,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("TikTok default format is b and bypasses proxy", func(t *testing.T) {
+	t.Run("TikTok default format is b and uses proxy", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://tiktok.com/@user/video/test",
 			"/downloads/test/%(id)s.%(ext)s",
@@ -51,12 +51,12 @@ func TestBuildYtDlpArgs(t *testing.T) {
 				hasBest = true
 			}
 		}
-		if hasProxy || !hasBest {
+		if !hasProxy || !hasBest {
 			t.Errorf("unexpected args: %v", args)
 		}
 	})
 
-	t.Run("Reels bypasses proxy and uses b format", func(t *testing.T) {
+	t.Run("Reels uses proxy and b format", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://instagram.com/reel/abc",
 			"/downloads/test/%(id)s.%(ext)s",
@@ -75,7 +75,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 				hasBest = true
 			}
 		}
-		if hasProxy || !hasBest {
+		if !hasProxy || !hasBest {
 			t.Errorf("unexpected args: %v", args)
 		}
 	})

@@ -45,8 +45,8 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 		url,
 	}
 
-	// Only YouTube traffic is routed through Xray. TikTok and Instagram bypass it.
-	useProxy := source == models.SourceYoutube
+	// All downloader traffic is routed through Xray. MAX API traffic remains direct.
+	useProxy := source == models.SourceYoutube || source == models.SourceTiktok || source == models.SourceReels
 	if useProxy && s.proxyAddr != "" {
 		proxyURL, err := config.NormalizeSocks5Proxy(s.proxyAddr)
 		if err != nil {
@@ -54,8 +54,6 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 		}
 		args = append(args, "--proxy", proxyURL)
 	}
-
-	// TikTok and Instagram format discovery remains direct; only YouTube uses Xray.
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 
