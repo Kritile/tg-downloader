@@ -144,7 +144,7 @@ The bot can interact via Telegram and MAX:
 - Send `/start` to begin
 - Send a YouTube or TikTok URL to download
 
-Telegram requests use `TELEGRAM_API_URL` through the configured SOCKS5 Xray transport. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly without Xray. All yt-dlp downloads use Xray.
+Go requests use `TELEGRAM_API_URL` directly over the internal Docker network. The Local Bot API container runs under `proxychains-ng`, so its outbound TDLib connections to Telegram use the configured `XRAY_SOCKS5_PROXY`; this is separate from the Go-to-local-API connection. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly without Xray. All yt-dlp downloads use the configured SOCKS5 endpoint.
 
 ### Admin Panel
 

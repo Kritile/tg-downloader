@@ -21,7 +21,7 @@ With admin panel, per-user access control, Redis queue, containerized SOCKS5 VPN
 * Follow **Clean Architecture**.
 * No hardcoded secrets — use env variables.
 * Bot must **delete downloaded files immediately after sending**.
-* Telegram API and all downloader traffic MUST go through the **SOCKS5 Xray VPN container**.
+* Telegram Local Bot API outbound traffic and downloader traffic MUST go through the configured **SOCKS5 Xray endpoint**.
 * MAX API traffic, including inbound updates and outbound uploads, MUST use a direct connection.
 
 ---
@@ -32,7 +32,7 @@ With admin panel, per-user access control, Redis queue, containerized SOCKS5 VPN
 * **Admin Panel**: Go (Gin), HTMX + TailwindCSS, session auth, bcrypt passwords
 * **Database**: PostgreSQL 15+, golang-migrate, GORM/sqlx
 * **Queue**: Redis 7+, list or stream
-* **VPN**: Xray client container with SOCKS5 proxy
+* **VPN**: configured Xray SOCKS5 endpoint
 * **Downloader**: yt-dlp with `--list-formats` for format selection
 
 ---
@@ -96,8 +96,7 @@ volumes:
   redisdata:
 ```
 
-* Xray SOCKS5 proxy listens on **0.0.0.0:10808** inside container
-* Bot routes Telegram API and all yt-dlp requests via proxy
+* The Local Bot API container routes its outbound TDLib connections and the bot routes yt-dlp requests via the SOCKS5 proxy
 * MAX API requests bypass VPN
 
 ---

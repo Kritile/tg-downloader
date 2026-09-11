@@ -66,7 +66,7 @@ func main() {
 	// Initialize bot
 	var telegramTransport *transport.TelegramTransport
 	if cfg.BotToken != "" {
-		botAPI, err := initTelegramBotAPILocal(cfg.BotToken, cfg.TelegramAPIURL, cfg.XraySocks5Proxy)
+		botAPI, err := initTelegramBotAPILocal(cfg.BotToken, cfg.TelegramAPIURL)
 		if err != nil {
 			log.Fatalf("Failed to initialize Telegram Local Bot API: %v", err)
 		}
