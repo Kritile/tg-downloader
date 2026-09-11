@@ -45,8 +45,8 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 		url,
 	}
 
-	// Route all supported external sources through the shared proxy.
-	useProxy := source == models.SourceYoutube || source == models.SourceTiktok || source == models.SourceReels
+	// Only YouTube traffic is routed through Xray. TikTok and Instagram bypass it.
+	useProxy := source == models.SourceYoutube
 	if useProxy && s.proxyAddr != "" {
 		proxyURL, err := config.NormalizeSocks5Proxy(s.proxyAddr)
 		if err != nil {
@@ -55,7 +55,7 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 		args = append(args, "--proxy", proxyURL)
 	}
 
-	// Add TikTok-specific options (no impersonation - relies on proxy)
+	// TikTok and Instagram format discovery remains direct; only YouTube uses Xray.
 
 	cmd := exec.CommandContext(ctx, "yt-dlp", args...)
 

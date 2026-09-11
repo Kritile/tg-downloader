@@ -166,7 +166,7 @@ volumes:
 
 # 9️⃣ FILE HANDLING
 
-* `/downloads` shared between bot and Telegram Local Bot API containers
+* `/tmp/downloads` inside bot container
 * Delete after sending
 * Delete on error as well
 
@@ -270,4 +270,5 @@ cmd/
 * Files deleted after sending
 * Docker-compose runs all services cleanly
 * Tests pass
+
 

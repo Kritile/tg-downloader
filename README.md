@@ -41,7 +41,9 @@ Edit `.env` and set:
 ```env
 BOT_TOKEN=your_telegram_bot_token
 MAX_BOT_TOKEN=your_max_bot_token
-TELEGRAM_API_URL=http://telegram-bot-api:8081/bot%s/%s
+TELEGRAM_API_ID=your_telegram_api_id
+TELEGRAM_API_HASH=your_telegram_api_hash
+TELEGRAM_API_URL=http://telegram-bot-api:8081
 GLOBAL_DEFAULT_DAILY_LIMIT=10
 GLOBAL_DEFAULT_MONTHLY_LIMIT=100
 WORKER_COUNT=3
@@ -142,7 +144,7 @@ The bot can interact via Telegram and MAX:
 - Send `/start` to begin
 - Send a YouTube or TikTok URL to download
 
-Telegram requests use `TELEGRAM_API_URL`, intended for a Telegram Local Bot API server. MAX requests use the MAX client directly. Xray is only passed to yt-dlp for YouTube downloads.
+Telegram requests use `TELEGRAM_API_URL`, intended for the internal Telegram Local Bot API server. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly. Xray is only passed to yt-dlp for YouTube downloads.
 
 ### Admin Panel
 
@@ -234,7 +236,9 @@ go run .
 |----------|-------------|---------|
 | `BOT_TOKEN` | Telegram bot token | Required |
 | `MAX_BOT_TOKEN` | MAX bot token | Optional |
-| `TELEGRAM_API_URL` | Telegram Local Bot API endpoint format | `https://api.telegram.org/bot%s/%s` |
+| `TELEGRAM_API_ID` | Telegram application ID for Local Bot API | Required for local mode |
+| `TELEGRAM_API_HASH` | Telegram application hash for Local Bot API | Required for local mode |
+| `TELEGRAM_API_URL` | Telegram Local Bot API base URL | `http://telegram-bot-api:8081` |
 | `DATABASE_URL` | PostgreSQL connection string | Required |
 | `REDIS_URL` | Redis connection string | Required |
 | `GLOBAL_DEFAULT_DAILY_LIMIT` | Default daily downloads | 10 |

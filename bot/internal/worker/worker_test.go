@@ -8,7 +8,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 	t.Run("YouTube with proxy and custom format", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://youtube.com/watch?v=test",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"/downloads/test/%(id)s.%(ext)s",
 			"22",
 			"socks5://xray-client:10808",
 			false,
@@ -32,10 +32,10 @@ func TestBuildYtDlpArgs(t *testing.T) {
 		}
 	})
 
-	t.Run("TikTok default format is b and uses proxy", func(t *testing.T) {
+	t.Run("TikTok default format is b and bypasses proxy", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://tiktok.com/@user/video/test",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
 			true,
@@ -51,15 +51,15 @@ func TestBuildYtDlpArgs(t *testing.T) {
 				hasBest = true
 			}
 		}
-		if !hasProxy || !hasBest {
+		if hasProxy || !hasBest {
 			t.Errorf("unexpected args: %v", args)
 		}
 	})
 
-	t.Run("Reels uses proxy and b format", func(t *testing.T) {
+	t.Run("Reels bypasses proxy and uses b format", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://instagram.com/reel/abc",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
 			false,
@@ -75,7 +75,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 				hasBest = true
 			}
 		}
-		if !hasProxy || !hasBest {
+		if hasProxy || !hasBest {
 			t.Errorf("unexpected args: %v", args)
 		}
 	})
@@ -83,7 +83,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 	t.Run("YouTube default format uses 720p cap", func(t *testing.T) {
 		args := wp.buildYtDlpArgs(
 			"https://youtube.com/watch?v=test",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
 			false,
@@ -105,7 +105,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 	t.Run("TikTok and Reels add impersonation", func(t *testing.T) {
 		tiktokArgs := wp.buildYtDlpArgs(
 			"https://tiktok.com/@user/video/test",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
 			true,
@@ -113,7 +113,7 @@ func TestBuildYtDlpArgs(t *testing.T) {
 		)
 		reelsArgs := wp.buildYtDlpArgs(
 			"https://instagram.com/reel/abc",
-			"/tmp/downloads/test/%(id)s.%(ext)s",
+			"/downloads/test/%(id)s.%(ext)s",
 			"",
 			"socks5://xray-client:10808",
 			false,
@@ -149,4 +149,13 @@ func TestWorkerPool_ProxyAddr(t *testing.T) {
 			t.Errorf("expected empty proxyAddr, got %s", wp.proxyAddr)
 		}
 	})
+}
+
+func TestMaxFileSize(t *testing.T) {
+	if got := maxFileSize("telegram"); got != 2000*1024*1024 {
+		t.Fatalf("telegram file limit = %d, want 2000 MB", got)
+	}
+	if got := maxFileSize("max"); got != 50*1024*1024 {
+		t.Fatalf("MAX file limit = %d, want 50 MB", got)
+	}
 }

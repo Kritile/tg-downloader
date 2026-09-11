@@ -23,7 +23,7 @@ func Load() *Config {
 	cfg := &Config{
 		BotToken:       os.Getenv("BOT_TOKEN"),
 		MaxBotToken:    os.Getenv("MAX_BOT_TOKEN"),
-		TelegramAPIURL: getEnvOrDefault("TELEGRAM_API_URL", "https://api.telegram.org/bot%s/%s"),
+		TelegramAPIURL: getEnvOrDefault("TELEGRAM_API_URL", "http://telegram-bot-api:8081"),
 		DatabaseURL:    os.Getenv("DATABASE_URL"),
 		RedisURL:       os.Getenv("REDIS_URL"),
 		AdminPort:      getEnvOrDefault("ADMIN_PORT", "8080"),

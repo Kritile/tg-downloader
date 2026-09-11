@@ -33,6 +33,24 @@ services:
     networks:
       - internal
 
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    container_name: mediaharvester-telegram-bot-api
+    command:
+      - --local
+      - --http-port=8081
+      - --dir=/var/lib/telegram-bot-api
+      - --temp-dir=/var/lib/telegram-bot-api/temp
+    environment:
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
+    volumes:
+      - telegram_bot_api_data:/var/lib/telegram-bot-api
+      - bot_downloads:/downloads
+    networks:
+      - internal
+    restart: unless-stopped
+
   migrate:
     build:
       context: .
@@ -58,12 +76,14 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      telegram-bot-api:
+        condition: service_started
       migrate:
         condition: service_completed_successfully
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
       - MAX_BOT_TOKEN=${MAX_BOT_TOKEN}
-      - TELEGRAM_API_URL=${TELEGRAM_API_URL:-http://telegram-bot-api:8081/bot%s/%s}
+      - TELEGRAM_API_URL=${TELEGRAM_API_URL:-http://telegram-bot-api:8081}
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/mediaharvester?sslmode=disable
       - REDIS_URL=redis://redis:6379/0
       - GLOBAL_DEFAULT_DAILY_LIMIT=${GLOBAL_DEFAULT_DAILY_LIMIT:-10}
@@ -71,7 +91,7 @@ services:
       - WORKER_COUNT=${WORKER_COUNT:-3}
       - XRAY_SOCKS5_PROXY=${XRAY_SOCKS5_PROXY}
     volumes:
-      - bot_downloads:/tmp/downloads
+      - bot_downloads:/downloads
     networks:
       - internal
     restart: unless-stopped
@@ -114,3 +134,4 @@ volumes:
   postgres_data:
   redis_data:
   bot_downloads:
+  telegram_bot_api_data:

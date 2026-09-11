@@ -92,7 +92,7 @@ func main() {
 		permissionSvc,
 		limitSvc,
 		formatSvc,
-		"/tmp/downloads",
+		"/downloads",
 	)
 	maxBot := transport.NewBot(
 		"max", maxTransport,
@@ -102,7 +102,7 @@ func main() {
 		permissionSvc,
 		limitSvc,
 		formatSvc,
-		"/tmp/downloads",
+		"/downloads",
 	)
 	notifier := transport.NewNotifierRouter(telegramBot, maxBot)
 

@@ -2,7 +2,9 @@ package transport
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -10,6 +12,17 @@ import (
 )
 
 type TelegramTransport struct{ api *tgbotapi.BotAPI }
+
+// localFilePath tells the Local Bot API server to read the file from its own
+// filesystem. The bot and API server share /downloads, so no multipart copy is
+// needed for large Telegram uploads.
+type localFilePath string
+
+func (localFilePath) NeedsUpload() bool { return false }
+func (p localFilePath) UploadData() (string, io.Reader, error) {
+	return "", nil, errors.New("local file path must not be uploaded")
+}
+func (p localFilePath) SendData() string { return "file://" + string(p) }
 
 func NewTelegramTransport(api *tgbotapi.BotAPI) *TelegramTransport {
 	return &TelegramTransport{api: api}
@@ -37,7 +50,7 @@ func (t *TelegramTransport) AnswerCallback(_ context.Context, id string) error {
 	return err
 }
 func (t *TelegramTransport) SendVideo(_ context.Context, chatID int64, path string) error {
-	video := tgbotapi.NewVideo(chatID, tgbotapi.FilePath(path))
+	video := tgbotapi.NewVideo(chatID, localFilePath(path))
 	video.Caption = "🎬 Here's your video!"
 	_, err := t.api.Send(video)
 	if cleanupErr := usecase.CleanupDownloadedFile(path); cleanupErr != nil {

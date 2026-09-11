@@ -37,8 +37,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o mediaharvester-bo
 # Build the migrate tool
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o migrate ./cmd/migrate
 
-# Create temp directory for downloads
-RUN mkdir -p /tmp/downloads
+# Create shared directory for downloads
+RUN mkdir -p /downloads
 
 EXPOSE 8080
 

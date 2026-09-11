@@ -268,7 +268,11 @@ func (b *Bot) SendVideo(platform string, chatID int64, path string) error {
 }
 func (b *Bot) SendFileTooLarge(platform string, chatID int64) {
 	if platform == b.platform {
-		b.text(context.Background(), chatID, "❌ File is too large. Maximum size is 50MB.")
+		message := "❌ File is too large. Maximum size is 50MB."
+		if platform == "telegram" {
+			message = "❌ File is too large. Telegram Local Bot API supports files up to 2000MB."
+		}
+		b.text(context.Background(), chatID, message)
 	}
 }
 func (b *Bot) SendDownloadFailed(platform string, chatID int64) {

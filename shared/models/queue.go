@@ -32,8 +32,12 @@ const (
 	StatusTooLarge    DownloadStatus = "too_large"
 )
 
-// Telegram max file size: 50MB
-const MaxTelegramFileSize = 50 * 1024 * 1024
+const (
+	// MaxTelegramFileSize is the Local Bot API outgoing file limit.
+	MaxTelegramFileSize int64 = 2000 * 1024 * 1024
+	// MaxMaxFileSize preserves the existing MAX upload guard.
+	MaxMaxFileSize int64 = 50 * 1024 * 1024
+)
 
 // VideoFormat represents a video format option
 type VideoFormat struct {

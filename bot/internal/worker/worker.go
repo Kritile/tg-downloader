@@ -17,7 +17,7 @@ import (
 
 const (
 	maxRetries   = 2
-	downloadPath = "/tmp/downloads"
+	downloadPath = "/downloads"
 )
 
 type WorkerPool struct {
@@ -140,7 +140,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	isYouTube := job.Source == string(models.SourceYoutube)
 	isTikTok := job.Source == string(models.SourceTiktok)
 	isReels := job.Source == string(models.SourceReels)
-	useProxy := isYouTube || isTikTok || isReels
+	useProxy := isYouTube
 	proxyURL := ""
 	if useProxy && wp.proxyAddr != "" {
 		var err error
@@ -173,7 +173,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 		return fmt.Errorf("failed to get file info: %w", err)
 	}
 
-	if fileInfo.Size() > models.MaxTelegramFileSize {
+	if fileInfo.Size() > maxFileSize(job.Platform) {
 		// Delete the file if too large
 		os.Remove(filePath)
 		wp.bot.SendFileTooLarge(job.Platform, job.ChatID)
@@ -195,6 +195,13 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	return nil
 }
 
+func maxFileSize(platform string) int64 {
+	if platform == "max" {
+		return models.MaxMaxFileSize
+	}
+	return models.MaxTelegramFileSize
+}
+
 // buildYtDlpArgs builds yt-dlp command arguments
 func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL string, isTikTok, isReels bool) []string {
 	args := []string{
@@ -202,7 +209,7 @@ func (wp *WorkerPool) buildYtDlpArgs(url, outputTemplate, format, proxyURL strin
 		"--output", outputTemplate,
 	}
 
-	if proxyURL != "" {
+	if proxyURL != "" && !isTikTok && !isReels {
 		args = append(args, "--proxy", proxyURL)
 	}
 
