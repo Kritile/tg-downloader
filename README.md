@@ -1,6 +1,6 @@
 # MediaHarvester Bot
 
-A Telegram bot for downloading videos from YouTube and TikTok with per-user access control and an admin panel.
+A Telegram and MAX bot for downloading videos from YouTube and TikTok with per-user access control and an admin panel.
 
 ## Features
 
@@ -17,7 +17,8 @@ A Telegram bot for downloading videos from YouTube and TikTok with per-user acce
 - **Database**: PostgreSQL 15
 - **Queue**: Redis 7
 - **Admin Panel**: Gin + HTMX + TailwindCSS
-- **Telegram Bot**: go-telegram-bot-api
+- **Telegram Bot**: go-telegram-bot-api through Telegram Local Bot API
+- **MAX Bot**: max-messenger/max-bot-api-client-go/v2 through the direct MAX API (never through Xray)
 - **Video Downloader**: yt-dlp
 
 ## Quick Start
@@ -39,6 +40,8 @@ Edit `.env` and set:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
+MAX_BOT_TOKEN=your_max_bot_token
+TELEGRAM_API_URL=http://telegram-bot-api:8081/bot%s/%s
 GLOBAL_DEFAULT_DAILY_LIMIT=10
 GLOBAL_DEFAULT_MONTHLY_LIMIT=100
 WORKER_COUNT=3
@@ -135,9 +138,11 @@ tg-downloader/
 
 ### Bot
 
-The bot interacts via Telegram:
+The bot can interact via Telegram and MAX:
 - Send `/start` to begin
 - Send a YouTube or TikTok URL to download
+
+Telegram requests use `TELEGRAM_API_URL`, intended for a Telegram Local Bot API server. MAX requests use the MAX client directly. Xray is only passed to yt-dlp for YouTube downloads.
 
 ### Admin Panel
 
@@ -228,6 +233,8 @@ go run .
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BOT_TOKEN` | Telegram bot token | Required |
+| `MAX_BOT_TOKEN` | MAX bot token | Optional |
+| `TELEGRAM_API_URL` | Telegram Local Bot API endpoint format | `https://api.telegram.org/bot%s/%s` |
 | `DATABASE_URL` | PostgreSQL connection string | Required |
 | `REDIS_URL` | Redis connection string | Required |
 | `GLOBAL_DEFAULT_DAILY_LIMIT` | Default daily downloads | 10 |

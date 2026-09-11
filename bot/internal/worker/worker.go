@@ -92,7 +92,7 @@ func (wp *WorkerPool) processJob(ctx context.Context, workerID int) {
 	if err != nil {
 		log.Printf("Worker %d failed to process job after retries: %v", workerID, err)
 		wp.logFailedDownload(job.UserID, models.VideoSource(job.Source), job.URL)
-		wp.bot.SendDownloadFailed(job.ChatID)
+		wp.bot.SendDownloadFailed(job.Platform, job.ChatID)
 	}
 }
 
@@ -176,7 +176,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	if fileInfo.Size() > models.MaxTelegramFileSize {
 		// Delete the file if too large
 		os.Remove(filePath)
-		wp.bot.SendFileTooLarge(job.ChatID)
+		wp.bot.SendFileTooLarge(job.Platform, job.ChatID)
 		return domain.ErrFileTooLarge
 	}
 
@@ -184,7 +184,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 	wp.logSuccessfulDownload(job.UserID, models.VideoSource(job.Source), job.URL, job.Format, fileInfo.Size())
 
 	// Send video to user
-	err = wp.bot.SendVideo(job.ChatID, filePath)
+	err = wp.bot.SendVideo(job.Platform, job.ChatID, filePath)
 	if err != nil {
 		// Try to delete file even if send fails
 		CleanupDownloadedFile(filePath)

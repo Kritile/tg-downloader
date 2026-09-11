@@ -1,4 +1,4 @@
-FROM golang:1.22-bookworm
+FROM golang:1.24-bookworm
 
 # Install ffmpeg, curl and pip for yt-dlp
 RUN apt-get update && apt-get install -y \

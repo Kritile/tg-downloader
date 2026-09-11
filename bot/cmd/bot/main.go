@@ -11,6 +11,7 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+	maxbot "github.com/max-messenger/max-bot-api-client-go/v2"
 	"github.com/mediaharvester/tg-downloader/bot/internal/repository"
 	"github.com/mediaharvester/tg-downloader/bot/internal/transport"
 	"github.com/mediaharvester/tg-downloader/bot/internal/usecase"
@@ -26,8 +27,8 @@ func main() {
 	cfg := config.Load()
 
 	// Validate required config
-	if cfg.BotToken == "" {
-		log.Fatal("BOT_TOKEN is required")
+	if cfg.BotToken == "" && cfg.MaxBotToken == "" {
+		log.Fatal("BOT_TOKEN or MAX_BOT_TOKEN is required")
 	}
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -47,13 +48,6 @@ func main() {
 	redisClient := initRedis(cfg.RedisURL)
 	defer redisClient.Close()
 
-	// Initialize Telegram bot
-	botAPI, err := initTelegramBotAPI(cfg.BotToken, cfg.XraySocks5Proxy)
-	if err != nil {
-		log.Fatalf("Failed to initialize bot: %v", err)
-	}
-	log.Printf("Authorized on account %s", botAPI.Self.UserName)
-
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	downloadRepo := repository.NewDownloadRepository(db)
@@ -70,8 +64,28 @@ func main() {
 	queueService := worker.NewQueueService(redisClient)
 
 	// Initialize bot
-	bot := transport.NewBot(
-		botAPI,
+	var telegramTransport *transport.TelegramTransport
+	if cfg.BotToken != "" {
+		botAPI, err := initTelegramBotAPILocal(cfg.BotToken, cfg.TelegramAPIURL)
+		if err != nil {
+			log.Fatalf("Failed to initialize Telegram Local Bot API: %v", err)
+		}
+		log.Printf("Telegram Local Bot API configured at %s", cfg.TelegramAPIURL)
+		telegramTransport = transport.NewTelegramTransport(botAPI)
+	}
+	var maxTransport *transport.MaxTransport
+	if cfg.MaxBotToken != "" {
+		maxAPI, err := maxbot.NewApi(cfg.MaxBotToken)
+		if err != nil {
+			log.Fatalf("Failed to initialize MAX bot: %v", err)
+		}
+		maxTransport = transport.NewMaxTransport(maxAPI)
+		log.Println("MAX bot configured with direct API access")
+	}
+
+	// Shared business workflow; platform transports only translate updates and API calls.
+	telegramBot := transport.NewBot(
+		"telegram", telegramTransport,
 		urlValidator,
 		queueService,
 		userService,
@@ -80,9 +94,20 @@ func main() {
 		formatSvc,
 		"/tmp/downloads",
 	)
+	maxBot := transport.NewBot(
+		"max", maxTransport,
+		urlValidator,
+		queueService,
+		userService,
+		permissionSvc,
+		limitSvc,
+		formatSvc,
+		"/tmp/downloads",
+	)
+	notifier := transport.NewNotifierRouter(telegramBot, maxBot)
 
 	// Initialize worker pool
-	workerPool := worker.NewWorkerPool(queueService, bot, cfg.WorkerCount, downloadRepo, cfg.XraySocks5Proxy)
+	workerPool := worker.NewWorkerPool(queueService, notifier, cfg.WorkerCount, downloadRepo, cfg.XraySocks5Proxy)
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -94,8 +119,19 @@ func main() {
 
 	// Start bot in a goroutine
 	go func() {
-		if err := bot.Start(ctx); err != nil {
+		if telegramTransport == nil {
+			return
+		}
+		if err := telegramTransport.Start(ctx, telegramBot); err != nil {
 			log.Printf("Bot error: %v", err)
+		}
+	}()
+	go func() {
+		if maxTransport == nil {
+			return
+		}
+		if err := maxTransport.Start(ctx, maxBot); err != nil {
+			log.Printf("MAX bot error: %v", err)
 		}
 	}()
 

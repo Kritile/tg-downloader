@@ -21,6 +21,15 @@ func initTelegramBotAPI(token string, proxyAddr string) (*tgbotapi.BotAPI, error
 	return tgbotapi.NewBotAPIWithClient(token, tgbotapi.APIEndpoint, client)
 }
 
+// initTelegramBotAPILocal connects to a Telegram Local Bot API server directly.
+// It deliberately does not accept a proxy: Xray is reserved for YouTube yt-dlp traffic.
+func initTelegramBotAPILocal(token, endpoint string) (*tgbotapi.BotAPI, error) {
+	if endpoint == "" {
+		return nil, fmt.Errorf("TELEGRAM_API_URL is required")
+	}
+	return tgbotapi.NewBotAPIWithAPIEndpoint(token, endpoint)
+}
+
 func newTelegramHTTPClient(proxyAddr string) (*http.Client, error) {
 	normalized, err := config.NormalizeSocks5Proxy(proxyAddr)
 	if err != nil {

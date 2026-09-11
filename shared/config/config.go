@@ -7,6 +7,8 @@ import (
 
 type Config struct {
 	BotToken                  string
+	MaxBotToken               string
+	TelegramAPIURL            string
 	DatabaseURL               string
 	RedisURL                  string
 	GlobalDefaultDailyLimit   int
@@ -19,12 +21,14 @@ type Config struct {
 
 func Load() *Config {
 	cfg := &Config{
-		BotToken:      os.Getenv("BOT_TOKEN"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
-		RedisURL:      os.Getenv("REDIS_URL"),
-		AdminPort:     getEnvOrDefault("ADMIN_PORT", "8080"),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		// Shared SOCKS5 proxy used for yt-dlp traffic and all Telegram Bot API requests.
+		BotToken:       os.Getenv("BOT_TOKEN"),
+		MaxBotToken:    os.Getenv("MAX_BOT_TOKEN"),
+		TelegramAPIURL: getEnvOrDefault("TELEGRAM_API_URL", "https://api.telegram.org/bot%s/%s"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		RedisURL:       os.Getenv("REDIS_URL"),
+		AdminPort:      getEnvOrDefault("ADMIN_PORT", "8080"),
+		SessionSecret:  os.Getenv("SESSION_SECRET"),
+		// SOCKS5 proxy is used only by yt-dlp for sources that require it.
 		XraySocks5Proxy: os.Getenv("XRAY_SOCKS5_PROXY"),
 	}
 

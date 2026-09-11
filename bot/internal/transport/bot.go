@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/mediaharvester/tg-downloader/bot/internal/domain"
-	"github.com/mediaharvester/tg-downloader/bot/internal/usecase"
 	"github.com/mediaharvester/tg-downloader/bot/internal/worker"
 	"github.com/mediaharvester/tg-downloader/shared/models"
 )
@@ -19,18 +18,45 @@ const (
 	callbackModeManual   = "mode_manual"
 )
 
+type Message struct {
+	Platform string
+	UserID   int64
+	ChatID   int64
+	Username string
+	Text     string
+}
+type Callback struct {
+	Platform string
+	ID       string
+	UserID   int64
+	ChatID   int64
+	Username string
+	Data     string
+}
+type Button struct {
+	Text     string
+	Callback string
+}
+
+type Messenger interface {
+	SendText(context.Context, int64, string) error
+	SendButtons(context.Context, int64, string, [][]Button) error
+	AnswerCallback(context.Context, string) error
+	SendVideo(context.Context, int64, string) error
+}
+
 type Bot struct {
-	api           *tgbotapi.BotAPI
+	platform      string
+	messenger     Messenger
 	urlValidator  domain.URLValidator
 	queueService  *worker.QueueService
 	userService   domain.UserService
 	permissionSvc domain.PermissionService
 	limitSvc      domain.LimitService
 	formatSvc     domain.FormatService
-	downloadPath  string
 	pendingURLs   map[int64]*pendingDownload
+	mu            sync.Mutex
 }
-
 type pendingDownload struct {
 	UserID   int64
 	ChatID   int64
@@ -39,349 +65,243 @@ type pendingDownload struct {
 	Username string
 }
 
-func NewBot(
-	api *tgbotapi.BotAPI,
-	urlValidator domain.URLValidator,
-	queueService *worker.QueueService,
-	userService domain.UserService,
-	permissionSvc domain.PermissionService,
-	limitSvc domain.LimitService,
-	formatSvc domain.FormatService,
-	downloadPath string,
-) *Bot {
-	return &Bot{
-		api:           api,
-		urlValidator:  urlValidator,
-		queueService:  queueService,
-		userService:   userService,
-		permissionSvc: permissionSvc,
-		limitSvc:      limitSvc,
-		formatSvc:     formatSvc,
-		downloadPath:  downloadPath,
-		pendingURLs:   make(map[int64]*pendingDownload),
-	}
+func NewBot(platform string, m Messenger, v domain.URLValidator, q *worker.QueueService, u domain.UserService, p domain.PermissionService, l domain.LimitService, f domain.FormatService, _ string) *Bot {
+	return &Bot{platform: platform, messenger: m, urlValidator: v, queueService: q, userService: u, permissionSvc: p, limitSvc: l, formatSvc: f, pendingURLs: map[int64]*pendingDownload{}}
 }
 
-func (b *Bot) Start(ctx context.Context) error {
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
-
-	updates := b.api.GetUpdatesChan(u)
-
-	log.Println("Bot started, listening for messages...")
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case update := <-updates:
-			if update.Message != nil {
-				b.handleMessage(ctx, update.Message)
-			} else if update.CallbackQuery != nil {
-				b.handleCallbackQuery(ctx, update.CallbackQuery)
-			}
-		}
-	}
-}
-
-func (b *Bot) handleMessage(ctx context.Context, message *tgbotapi.Message) {
-	if message.Text == "" {
+func (b *Bot) HandleMessage(ctx context.Context, message Message) {
+	text := strings.TrimSpace(message.Text)
+	if text == "" {
 		return
 	}
-
-	text := strings.TrimSpace(message.Text)
-
 	switch text {
 	case "/start":
-		b.handleStartCommand(ctx, message)
-		return
+		b.start(ctx, message)
 	case "/limits":
-		b.handleLimitsCommand(ctx, message)
-		return
+		b.limits(ctx, message)
 	case "/mode":
-		b.handleModeCommand(ctx, message)
-		return
+		b.mode(ctx, message)
+	default:
+		b.url(ctx, message)
 	}
-
-	b.handleURL(ctx, message, text)
 }
-
-func (b *Bot) handleCallbackQuery(ctx context.Context, callback *tgbotapi.CallbackQuery) {
-	answer := tgbotapi.CallbackConfig{CallbackQueryID: callback.ID}
-	b.api.Request(answer)
-
-	data := callback.Data
-	chatID := callback.Message.Chat.ID
-
-	if data == callbackDownloadBest {
-		b.handleDownloadBest(ctx, chatID)
-		return
-	}
-	if data == callbackModeAuto || data == callbackModeManual {
-		b.handleModeSelected(ctx, callback, data)
-		return
-	}
-	if strings.HasPrefix(data, "format_") {
-		formatID := strings.TrimPrefix(data, "format_")
-		b.handleFormatSelected(ctx, chatID, formatID)
-		return
+func (b *Bot) HandleCallback(ctx context.Context, callback Callback) {
+	_ = b.messenger.AnswerCallback(ctx, callback.ID)
+	switch {
+	case callback.Data == callbackDownloadBest:
+		b.selectFormat(ctx, callback.ChatID, "")
+	case callback.Data == callbackModeAuto || callback.Data == callbackModeManual:
+		b.modeSelected(ctx, callback, callback.Data)
+	case strings.HasPrefix(callback.Data, "format_"):
+		b.selectFormat(ctx, callback.ChatID, strings.TrimPrefix(callback.Data, "format_"))
 	}
 }
 
-func (b *Bot) handleStartCommand(ctx context.Context, message *tgbotapi.Message) {
-	user, err := b.userService.GetOrCreate(ctx, message.From.ID, message.From.UserName)
+func (b *Bot) start(ctx context.Context, m Message) {
+	user, err := b.userService.GetOrCreate(ctx, m.UserID, m.Username)
 	if err != nil {
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to initialize profile"))
+		b.error(ctx, m.ChatID, fmt.Errorf("failed to initialize profile"))
 		return
 	}
-
-	b.sendMessage(message.Chat.ID,
-		"👋 Welcome to MediaHarvester Bot!\n\n"+
-			"Send me a YouTube or TikTok link and I'll download the video for you.\n\n"+
-			"Commands:\n"+
-			"/mode — choose download mode\n"+
-			"/limits — show your limits and usage")
-
+	b.text(ctx, m.ChatID, "👋 Welcome to MediaHarvester Bot!\n\nSend me a YouTube, TikTok, or Instagram link and I'll download the video for you.\n\nCommands:\n/mode — choose download mode\n/limits — show your limits and usage")
 	if user.AutoBestDownload == nil {
-		b.sendModeSelection(message.Chat.ID, "Выберите режим скачивания:")
+		b.modeButtons(ctx, m.ChatID, "Choose download mode:")
 	}
 }
-
-func (b *Bot) handleModeCommand(ctx context.Context, message *tgbotapi.Message) {
-	_, err := b.userService.GetOrCreate(ctx, message.From.ID, message.From.UserName)
-	if err != nil {
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to load profile"))
+func (b *Bot) mode(ctx context.Context, m Message) {
+	if _, err := b.userService.GetOrCreate(ctx, m.UserID, m.Username); err != nil {
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-	b.sendModeSelection(message.Chat.ID, "Текущий режим можно изменить в любой момент:")
+	b.modeButtons(ctx, m.ChatID, "You can change the download mode at any time:")
 }
-
-func (b *Bot) handleModeSelected(ctx context.Context, callback *tgbotapi.CallbackQuery, selected string) {
-	user, err := b.userService.GetOrCreate(ctx, callback.From.ID, callback.From.UserName)
+func (b *Bot) modeSelected(ctx context.Context, c Callback, selected string) {
+	user, err := b.userService.GetOrCreate(ctx, c.UserID, c.Username)
 	if err != nil {
-		b.sendError(callback.Message.Chat.ID, fmt.Errorf("failed to update mode"))
+		b.error(ctx, c.ChatID, err)
 		return
 	}
-
-	autoBest := selected == callbackModeAuto
-	if err := b.userService.SetAutoBestDownload(ctx, user.ID, autoBest); err != nil {
-		b.sendError(callback.Message.Chat.ID, fmt.Errorf("failed to save mode"))
+	if err = b.userService.SetAutoBestDownload(ctx, user.ID, selected == callbackModeAuto); err != nil {
+		b.error(ctx, c.ChatID, err)
 		return
 	}
-
-	if autoBest {
-		b.sendMessage(callback.Message.Chat.ID, "✅ Режим обновлён: автоматическая загрузка в лучшем качестве.")
+	if selected == callbackModeAuto {
+		b.text(ctx, c.ChatID, "✅ Mode updated: automatic best quality.")
 	} else {
-		b.sendMessage(callback.Message.Chat.ID, "✅ Режим обновлён: ручной выбор качества перед загрузкой.")
+		b.text(ctx, c.ChatID, "✅ Mode updated: choose quality manually.")
 	}
 }
-
-func (b *Bot) handleLimitsCommand(ctx context.Context, message *tgbotapi.Message) {
-	user, err := b.userService.GetOrCreate(ctx, message.From.ID, message.From.UserName)
+func (b *Bot) limits(ctx context.Context, m Message) {
+	user, err := b.userService.GetOrCreate(ctx, m.UserID, m.Username)
 	if err != nil {
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to load limits"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-
-	_, currentDaily, dailyLimit, err := b.limitSvc.CheckDailyLimit(ctx, user)
+	_, d, dl, err := b.limitSvc.CheckDailyLimit(ctx, user)
 	if err != nil {
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to load daily limit"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-	_, currentMonthly, monthlyLimit, err := b.limitSvc.CheckMonthlyLimit(ctx, user)
+	_, mo, ml, err := b.limitSvc.CheckMonthlyLimit(ctx, user)
 	if err != nil {
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to load monthly limit"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-
-	b.sendMessage(message.Chat.ID, fmt.Sprintf("📊 Ваши лимиты:\n• Сегодня: %d/%d\n• За месяц: %d/%d", currentDaily, dailyLimit, currentMonthly, monthlyLimit))
+	b.text(ctx, m.ChatID, fmt.Sprintf("📊 Limits:\n• Today: %d/%d\n• This month: %d/%d", d, dl, mo, ml))
+}
+func (b *Bot) modeButtons(ctx context.Context, chatID int64, title string) {
+	_ = b.messenger.SendButtons(ctx, chatID, title, [][]Button{{{Text: "⚡ Automatic (best quality)", Callback: callbackModeAuto}}, {{Text: "🎛️ Choose quality manually", Callback: callbackModeManual}}})
 }
 
-func (b *Bot) handleURL(ctx context.Context, message *tgbotapi.Message, text string) {
-	source, err := b.urlValidator.ValidateAndDetectSource(text)
+func (b *Bot) url(ctx context.Context, m Message) {
+	source, err := b.urlValidator.ValidateAndDetectSource(m.Text)
 	if err != nil {
-		b.sendError(message.Chat.ID, err)
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-
-	user, err := b.userService.GetOrCreate(ctx, message.From.ID, message.From.UserName)
+	user, err := b.userService.GetOrCreate(ctx, m.UserID, m.Username)
 	if err != nil {
-		log.Printf("Failed to get/create user: %v", err)
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to process request"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-
 	if user.AutoBestDownload == nil {
-		b.sendModeSelection(message.Chat.ID, "Перед первой загрузкой выберите режим: автоматический или ручной.")
+		b.modeButtons(ctx, m.ChatID, "Choose automatic or manual quality before the first download.")
 		return
 	}
-
-	hasPermission, err := b.permissionSvc.CheckPermission(ctx, user, source)
+	ok, err := b.permissionSvc.CheckPermission(ctx, user, source)
 	if err != nil {
-		log.Printf("Failed to check permission: %v", err)
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to check permission"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-	if !hasPermission {
-		b.sendMessage(message.Chat.ID, "❌ You don't have permission to download from this source.")
+	if !ok {
+		b.text(ctx, m.ChatID, "❌ You don't have permission to download from this source.")
 		return
 	}
-
-	dailyOk, currentDaily, limitDaily, err := b.limitSvc.CheckDailyLimit(ctx, user)
+	daily, current, limit, err := b.limitSvc.CheckDailyLimit(ctx, user)
 	if err != nil {
-		log.Printf("Failed to check daily limit: %v", err)
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to check limit"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-	if !dailyOk {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Daily limit exceeded. You've downloaded %d/%d videos today.", currentDaily, limitDaily))
+	if !daily {
+		b.text(ctx, m.ChatID, fmt.Sprintf("⚠️ Daily limit exceeded: %d/%d.", current, limit))
 		return
 	}
-
-	monthlyOk, currentMonthly, limitMonthly, err := b.limitSvc.CheckMonthlyLimit(ctx, user)
+	monthly, current, limit, err := b.limitSvc.CheckMonthlyLimit(ctx, user)
 	if err != nil {
-		log.Printf("Failed to check monthly limit: %v", err)
-		b.sendError(message.Chat.ID, fmt.Errorf("failed to check limit"))
+		b.error(ctx, m.ChatID, err)
 		return
 	}
-	if !monthlyOk {
-		b.sendMessage(message.Chat.ID, fmt.Sprintf("⚠️ Monthly limit exceeded. You've downloaded %d/%d videos this month.", currentMonthly, limitMonthly))
+	if !monthly {
+		b.text(ctx, m.ChatID, fmt.Sprintf("⚠️ Monthly limit exceeded: %d/%d.", current, limit))
 		return
 	}
-
-	if source == models.SourceReels {
-		b.sendMessage(message.Chat.ID, "⬇️ Instagram Reels always downloads in best quality... Please wait.")
-		b.queueDownload(ctx, message.Chat.ID, user.ID, text, string(source), "")
+	if source == models.SourceReels || *user.AutoBestDownload {
+		b.queue(ctx, m, string(source), "")
 		return
 	}
-
-	if user.AutoBestDownload != nil && *user.AutoBestDownload {
-		b.sendMessage(message.Chat.ID, "⬇️ Downloading with best quality... Please wait.")
-		b.queueDownload(ctx, message.Chat.ID, user.ID, text, string(source), "")
+	b.mu.Lock()
+	b.pendingURLs[m.ChatID] = &pendingDownload{UserID: user.ID, ChatID: m.ChatID, URL: m.Text, Source: string(source), Username: m.Username}
+	b.mu.Unlock()
+	b.text(ctx, m.ChatID, "🔍 Fetching available formats... Please wait.")
+	formats, err := b.formatSvc.ListFormats(ctx, m.Text, source)
+	if err != nil || len(formats) == 0 {
+		b.text(ctx, m.ChatID, "⚠️ Could not fetch formats. Downloading with best quality...")
+		b.queue(ctx, m, string(source), "")
 		return
 	}
+	_ = b.SendFormatSelection(ctx, m.ChatID, formats)
+}
 
-	b.pendingURLs[message.Chat.ID] = &pendingDownload{UserID: user.ID, ChatID: message.Chat.ID, URL: text, Source: string(source), Username: message.From.UserName}
-	b.sendMessage(message.Chat.ID, "🔍 Fetching available formats... Please wait.")
-
-	formats, err := b.formatSvc.ListFormats(ctx, text, source)
-	if err != nil {
-		log.Printf("Failed to list formats: %v", err)
-		b.sendMessage(message.Chat.ID, "⚠️ Could not fetch formats. Downloading with best quality...")
-		b.queueDownload(ctx, message.Chat.ID, user.ID, text, string(source), "")
-		return
+func (b *Bot) SendFormatSelection(ctx context.Context, chatID int64, formats []models.VideoFormat) error {
+	max := len(formats)
+	if max > 10 {
+		max = 10
 	}
-	if len(formats) == 0 {
-		b.sendMessage(message.Chat.ID, "⚠️ No formats found. Downloading with best quality...")
-		b.queueDownload(ctx, message.Chat.ID, user.ID, text, string(source), "")
-		return
-	}
-
-	b.SendFormatSelection(message.Chat.ID, formats)
-}
-
-func (b *Bot) sendModeSelection(chatID int64, title string) {
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⚡ Автоматически (лучшее качество)", callbackModeAuto),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🎛️ Выбирать качество вручную", callbackModeManual),
-		),
-	)
-	msg := tgbotapi.NewMessage(chatID, title)
-	msg.ReplyMarkup = keyboard
-	b.api.Send(msg)
-}
-
-func (b *Bot) sendError(chatID int64, err error) {
-	errorMsg := "❌ An error occurred: " + err.Error()
-	if err == domain.ErrInvalidURL {
-		errorMsg = "❌ Invalid URL. Please send a valid YouTube, TikTok, or Instagram Reels link."
-	} else if err == domain.ErrUnsupportedSource {
-		errorMsg = "❌ Unsupported source. Currently YouTube, TikTok, and Instagram Reels are supported."
-	}
-	b.sendMessage(chatID, errorMsg)
-}
-
-func (b *Bot) sendMessage(chatID int64, text string) {
-	msg := tgbotapi.NewMessage(chatID, text)
-	b.api.Send(msg)
-}
-
-func (b *Bot) SendVideo(chatID int64, filePath string) error {
-	video := tgbotapi.NewVideo(chatID, tgbotapi.FilePath(filePath))
-	video.Caption = "🎬 Here's your video!"
-
-	_, err := b.api.Send(video)
-	if err != nil {
-		return fmt.Errorf("failed to send video: %w", err)
-	}
-	if err := usecase.CleanupDownloadedFile(filePath); err != nil {
-		log.Printf("Failed to delete file %s: %v", filePath, err)
-	}
-	return nil
-}
-
-func (b *Bot) SendFileTooLarge(chatID int64) {
-	b.sendMessage(chatID, "❌ File is too large. Maximum size is 50MB.")
-}
-func (b *Bot) SendDownloadFailed(chatID int64) {
-	b.sendMessage(chatID, "❌ Failed to download video. Please try another link.")
-}
-
-func (b *Bot) SendFormatSelection(chatID int64, formats []models.VideoFormat) error {
-	maxFormats := 10
-	if len(formats) < maxFormats {
-		maxFormats = len(formats)
-	}
-
-	keyboard := make([][]tgbotapi.InlineKeyboardButton, 0)
-	for i := 0; i < maxFormats; i += 2 {
-		row := []tgbotapi.InlineKeyboardButton{tgbotapi.NewInlineKeyboardButtonData(formats[i].DisplayName, fmt.Sprintf("format_%s", formats[i].FormatID))}
-		if i+1 < maxFormats {
-			row = append(row, tgbotapi.NewInlineKeyboardButtonData(formats[i+1].DisplayName, fmt.Sprintf("format_%s", formats[i+1].FormatID)))
+	rows := make([][]Button, 0)
+	for i := 0; i < max; i += 2 {
+		row := []Button{{Text: formats[i].DisplayName, Callback: "format_" + formats[i].FormatID}}
+		if i+1 < max {
+			row = append(row, Button{Text: formats[i+1].DisplayName, Callback: "format_" + formats[i+1].FormatID})
 		}
-		keyboard = append(keyboard, row)
+		rows = append(rows, row)
 	}
-	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{tgbotapi.NewInlineKeyboardButtonData("⚡ Best Quality (Auto)", callbackDownloadBest)})
-
-	msg := tgbotapi.NewMessage(chatID, "📹 Select video quality:")
-	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
-	_, err := b.api.Send(msg)
-	return err
+	rows = append(rows, []Button{{Text: "⚡ Best Quality (Auto)", Callback: callbackDownloadBest}})
+	return b.messenger.SendButtons(ctx, chatID, "📹 Select video quality:", rows)
 }
-
-func (b *Bot) handleDownloadBest(ctx context.Context, chatID int64) {
-	pending, ok := b.pendingURLs[chatID]
+func (b *Bot) selectFormat(ctx context.Context, chatID int64, format string) {
+	b.mu.Lock()
+	p, ok := b.pendingURLs[chatID]
+	if ok {
+		delete(b.pendingURLs, chatID)
+	}
+	b.mu.Unlock()
 	if !ok {
-		b.sendMessage(chatID, "❌ Session expired. Please send the URL again.")
+		b.text(ctx, chatID, "❌ Session expired. Please send the URL again.")
 		return
 	}
-	delete(b.pendingURLs, chatID)
-
-	b.sendMessage(chatID, "⬇️ Downloading with best quality... Please wait.")
-	b.queueDownload(ctx, pending.ChatID, pending.UserID, pending.URL, pending.Source, "")
+	b.queue(ctx, Message{UserID: p.UserID, ChatID: p.ChatID, Username: p.Username, Text: p.URL}, p.Source, format)
+}
+func (b *Bot) queue(ctx context.Context, m Message, source, format string) {
+	if err := b.queueService.PushJob(ctx, &models.DownloadJob{Platform: b.platform, UserID: m.UserID, ChatID: m.ChatID, URL: m.Text, Source: source, Username: m.Username, Format: format}); err != nil {
+		b.error(ctx, m.ChatID, err)
+		return
+	}
+	b.text(ctx, m.ChatID, "⬇️ Downloading your video... Please wait.")
+}
+func (b *Bot) text(ctx context.Context, chatID int64, s string) {
+	if err := b.messenger.SendText(ctx, chatID, s); err != nil {
+		log.Printf("send message: %v", err)
+	}
+}
+func (b *Bot) error(ctx context.Context, chatID int64, err error) {
+	text := "❌ An error occurred: " + err.Error()
+	if err == domain.ErrInvalidURL {
+		text = "❌ Invalid URL. Send a valid YouTube, TikTok, or Instagram link."
+	}
+	b.text(ctx, chatID, text)
+}
+func (b *Bot) SendVideo(platform string, chatID int64, path string) error {
+	if platform != b.platform {
+		return fmt.Errorf("platform %s is not handled by %s transport", platform, b.platform)
+	}
+	return b.messenger.SendVideo(context.Background(), chatID, path)
+}
+func (b *Bot) SendFileTooLarge(platform string, chatID int64) {
+	if platform == b.platform {
+		b.text(context.Background(), chatID, "❌ File is too large. Maximum size is 50MB.")
+	}
+}
+func (b *Bot) SendDownloadFailed(platform string, chatID int64) {
+	if platform == b.platform {
+		b.text(context.Background(), chatID, "❌ Failed to download video. Please try another link.")
+	}
 }
 
-func (b *Bot) handleFormatSelected(ctx context.Context, chatID int64, formatID string) {
-	pending, ok := b.pendingURLs[chatID]
-	if !ok {
-		b.sendMessage(chatID, "❌ Session expired. Please send the URL again.")
-		return
-	}
-	delete(b.pendingURLs, chatID)
+type NotifierRouter struct{ bots map[string]*Bot }
 
-	b.sendMessage(chatID, "⬇️ Downloading with selected format... Please wait.")
-	b.queueDownload(ctx, pending.ChatID, pending.UserID, pending.URL, pending.Source, formatID)
+func NewNotifierRouter(bots ...*Bot) *NotifierRouter {
+	result := &NotifierRouter{bots: map[string]*Bot{}}
+	for _, bot := range bots {
+		if bot != nil {
+			result.bots[bot.platform] = bot
+		}
+	}
+	return result
 }
-
-func (b *Bot) queueDownload(ctx context.Context, chatID, userID int64, url, source, format string) {
-	job := &models.DownloadJob{UserID: userID, ChatID: chatID, URL: url, Source: source, Format: format}
-	if err := b.queueService.PushJob(ctx, job); err != nil {
-		log.Printf("Failed to push job to queue: %v", err)
-		b.sendError(chatID, fmt.Errorf("failed to queue download"))
-		return
+func (r *NotifierRouter) SendVideo(platform string, chatID int64, path string) error {
+	bot := r.bots[platform]
+	if bot == nil {
+		return fmt.Errorf("no notifier for platform %s", platform)
 	}
-	b.sendMessage(chatID, "⬇️ Downloading your video... Please wait.")
+	return bot.SendVideo(platform, chatID, path)
+}
+func (r *NotifierRouter) SendFileTooLarge(platform string, chatID int64) {
+	if bot := r.bots[platform]; bot != nil {
+		bot.SendFileTooLarge(platform, chatID)
+	}
+}
+func (r *NotifierRouter) SendDownloadFailed(platform string, chatID int64) {
+	if bot := r.bots[platform]; bot != nil {
+		bot.SendDownloadFailed(platform, chatID)
+	}
 }
