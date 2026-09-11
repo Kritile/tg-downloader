@@ -1,0 +1,36 @@
+[Interface]
+Address = 10.8.1.10/32
+DNS = 1.1.1.1, 1.0.0.1
+
+# Fill these values only in the ignored awg0.conf runtime file.
+PrivateKey = REPLACE_WITH_PRIVATE_KEY
+
+# AmneziaWG 3 obfuscation parameters. Do not remove them or use wg-quick.
+Jc = 6
+Jmin = 10
+Jmax = 50
+S1 = 122
+S2 = 92
+S3 = 28
+S4 = 1
+H1 = 749930171-961988710
+H2 = 974547039-1612614365
+H3 = 1656259508-1694126436
+H4 = 2086740635-2103959340
+I1 =
+I2 =
+I3 =
+I4 =
+I5 =
+
+# Keep the Docker namespace's main route untouched; the sidecar adds the
+# isolated policy route after awg-quick creates awg0.
+Table = off
+FwMark = 51820
+
+[Peer]
+PublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY
+PresharedKey = REPLACE_WITH_PRESHARED_KEY
+AllowedIPs = 0.0.0.0/0
+Endpoint = REPLACE_WITH_IPV4_ENDPOINT:31741
+PersistentKeepalive = 25

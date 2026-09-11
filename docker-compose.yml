@@ -34,14 +34,15 @@ services:
       - internal
 
   telegram-bot-api:
-    build:
-      context: .
-      dockerfile: docker/telegram-bot-api/Dockerfile
     container_name: mediaharvester-telegram-bot-api
+    image: aiogram/telegram-bot-api:latest
+    network_mode: service:telegram-vpn
+    depends_on:
+      telegram-vpn:
+        condition: service_healthy
     environment:
       TELEGRAM_API_ID: ${TELEGRAM_API_ID}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH}
-      XRAY_SOCKS5_PROXY: ${XRAY_SOCKS5_PROXY}
       TELEGRAM_LOCAL: "1"
       TELEGRAM_HTTP_PORT: "8081"
       TELEGRAM_WORK_DIR: /var/lib/telegram-bot-api
@@ -49,8 +50,30 @@ services:
     volumes:
       - telegram_bot_api_data:/var/lib/telegram-bot-api
       - bot_downloads:/downloads
+    restart: unless-stopped
+
+  telegram-vpn:
+    build:
+      context: .
+      dockerfile: docker/telegram-vpn/Dockerfile
+    container_name: mediaharvester-telegram-vpn
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      WG_QUICK_USERSPACE_IMPLEMENTATION: amneziawg-go
+    volumes:
+      - ${TELEGRAM_AWG_CONFIG_PATH:-./docker/telegram-vpn/config/awg0.conf}:/etc/amneziawg/awg0.conf:ro
     networks:
-      - internal
+      internal:
+        aliases:
+          - telegram-bot-api
+    healthcheck:
+      test: ["CMD-SHELL", "ip link show awg0 >/dev/null 2>&1 && ip rule show | grep -q '51820'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     restart: unless-stopped
 
   migrate:
@@ -83,7 +106,7 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
+      - BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - MAX_BOT_TOKEN=${MAX_BOT_TOKEN}
       - TELEGRAM_API_URL=${TELEGRAM_API_URL:-http://telegram-bot-api:8081}
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/mediaharvester?sslmode=disable
@@ -131,6 +154,9 @@ services:
 networks:
   internal:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.250.0/24
 
 volumes:
   postgres_data:

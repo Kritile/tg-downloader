@@ -34,22 +34,30 @@ cd tg-downloader
 
 ```bash
 cp .env.example .env
+cp docker/telegram-vpn/config/awg0.conf.example docker/telegram-vpn/config/awg0.conf
+chmod 600 docker/telegram-vpn/config/awg0.conf
 ```
 
 Edit `.env` and set:
 
 ```env
-BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 MAX_BOT_TOKEN=your_max_bot_token
 TELEGRAM_API_ID=your_telegram_api_id
 TELEGRAM_API_HASH=your_telegram_api_hash
 TELEGRAM_API_URL=http://telegram-bot-api:8081
+TELEGRAM_AWG_CONFIG_PATH=./docker/telegram-vpn/config/awg0.conf
 GLOBAL_DEFAULT_DAILY_LIMIT=10
 GLOBAL_DEFAULT_MONTHLY_LIMIT=100
 WORKER_COUNT=3
 ADMIN_PORT=8080
 SESSION_SECRET=your_secret_key_change_in_production
 ```
+
+Edit `docker/telegram-vpn/config/awg0.conf` and provide the real AmneziaWG 3
+keys, peer endpoint, and `I1`-`I5` values. This file is ignored by Git. The
+Telegram VPN uses IPv4-only `AllowedIPs = 0.0.0.0/0`; Docker-internal traffic
+and the AWG endpoint remain on the underlying `eth0` route.
 
 ### 3. Start with Docker Compose
 
@@ -144,7 +152,7 @@ The bot can interact via Telegram and MAX:
 - Send `/start` to begin
 - Send a YouTube or TikTok URL to download
 
-Go requests use `TELEGRAM_API_URL` directly over the internal Docker network. The Local Bot API container runs under `proxychains-ng`, so its outbound TDLib connections to Telegram use the configured `XRAY_SOCKS5_PROXY`; this is separate from the Go-to-local-API connection. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly without Xray. All yt-dlp downloads use the configured SOCKS5 endpoint.
+Go requests use `TELEGRAM_API_URL` directly over the internal Docker network. The Local Bot API shares a network namespace with the dedicated AmneziaWG 3 sidecar, which routes its outbound TDLib traffic through `awg0`. The Go-to-local-API connection and all other Compose services remain outside that namespace. The Compose deployment shares `/downloads` between the worker and Local Bot API container, allowing Telegram to consume local file paths. MAX requests use the MAX client directly without Xray. All yt-dlp downloads use the configured SOCKS5 endpoint.
 
 ### Admin Panel
 
@@ -234,11 +242,12 @@ go run .
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BOT_TOKEN` | Telegram bot token | Required |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token | Required |
 | `MAX_BOT_TOKEN` | MAX bot token | Optional |
 | `TELEGRAM_API_ID` | Telegram application ID for Local Bot API | Required for local mode |
 | `TELEGRAM_API_HASH` | Telegram application hash for Local Bot API | Required for local mode |
 | `TELEGRAM_API_URL` | Telegram Local Bot API base URL | `http://telegram-bot-api:8081` |
+| `TELEGRAM_AWG_CONFIG_PATH` | Ignored runtime AmneziaWG 3 client config | `./docker/telegram-vpn/config/awg0.conf` |
 | `DATABASE_URL` | PostgreSQL connection string | Required |
 | `REDIS_URL` | Redis connection string | Required |
 | `GLOBAL_DEFAULT_DAILY_LIMIT` | Default daily downloads | 10 |

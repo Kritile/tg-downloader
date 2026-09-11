@@ -21,7 +21,7 @@ With admin panel, per-user access control, Redis queue, containerized SOCKS5 VPN
 * Follow **Clean Architecture**.
 * No hardcoded secrets — use env variables.
 * Bot must **delete downloaded files immediately after sending**.
-* Telegram Local Bot API outbound traffic and downloader traffic MUST go through the configured **SOCKS5 Xray endpoint**.
+* Telegram Local Bot API outbound traffic MUST go through the isolated **AmneziaWG 3 sidecar**; downloader traffic uses the configured SOCKS5 Xray endpoint.
 * MAX API traffic, including inbound updates and outbound uploads, MUST use a direct connection.
 
 ---
@@ -32,7 +32,7 @@ With admin panel, per-user access control, Redis queue, containerized SOCKS5 VPN
 * **Admin Panel**: Go (Gin), HTMX + TailwindCSS, session auth, bcrypt passwords
 * **Database**: PostgreSQL 15+, golang-migrate, GORM/sqlx
 * **Queue**: Redis 7+, list or stream
-* **VPN**: configured Xray SOCKS5 endpoint
+* **VPN**: AmneziaWG 3 sidecar for Telegram and configured SOCKS5 endpoint for downloads
 * **Downloader**: yt-dlp with `--list-formats` for format selection
 
 ---
@@ -45,7 +45,7 @@ docker-compose.yml:
 services:
   bot:
     build: ./bot
-    depends_on: [postgres, redis, xray-client]
+    depends_on: [postgres, redis, telegram-bot-api]
     environment:
       - BOT_TOKEN
       - DATABASE_URL
@@ -80,13 +80,19 @@ services:
     networks:
       - internal
 
-  xray-client:
-    image: teddysun/xray
+  telegram-vpn:
+    build: ./docker/telegram-vpn
+    cap_add: [NET_ADMIN]
+    devices:
+      - /dev/net/tun:/dev/net/tun
     volumes:
-      - ./xray/config.json:/etc/xray/config.json
-    restart: unless-stopped
+      - ./docker/telegram-vpn/config/awg0.conf:/etc/amneziawg/awg0.conf:ro
     networks:
       - internal
+
+  telegram-bot-api:
+    image: aiogram/telegram-bot-api:latest
+    network_mode: service:telegram-vpn
 
 networks:
   internal:
@@ -96,7 +102,8 @@ volumes:
   redisdata:
 ```
 
-* The Local Bot API container routes its outbound TDLib connections and the bot routes yt-dlp requests via the SOCKS5 proxy
+* The Local Bot API container shares a network namespace with the AmneziaWG 3 sidecar
+* The bot routes yt-dlp requests via the independent SOCKS5 proxy
 * MAX API requests bypass VPN
 
 ---
@@ -190,7 +197,7 @@ volumes:
 # 12️⃣ ENV VARIABLES
 
 ```
-BOT_TOKEN=
+TELEGRAM_BOT_TOKEN=
 DATABASE_URL=
 REDIS_URL=
 GLOBAL_DEFAULT_DAILY_LIMIT=
@@ -198,7 +205,8 @@ GLOBAL_DEFAULT_MONTHLY_LIMIT=
 WORKER_COUNT=3
 ADMIN_PORT=8080
 SESSION_SECRET=
-XRAY_CONFIG_PATH=
+TELEGRAM_AWG_CONFIG_PATH=./docker/telegram-vpn/config/awg0.conf
+XRAY_SOCKS5_PROXY=
 ```
 
 ---

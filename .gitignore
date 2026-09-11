@@ -39,3 +39,5 @@ Thumbs.db
 
 # VPN Config (contains sensitive credentials)
 xray/config.json
+docker/telegram-vpn/config/*.conf
+!docker/telegram-vpn/config/*.conf.example
