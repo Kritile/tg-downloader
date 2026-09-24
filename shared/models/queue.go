@@ -2,13 +2,15 @@ package models
 
 // DownloadJob represents a job in the Redis queue
 type DownloadJob struct {
-	Platform string `json:"platform"`
-	UserID   int64  `json:"user_id"`
-	ChatID   int64  `json:"chat_id"`
-	URL      string `json:"url"`
-	Source   string `json:"source"`
-	Username string `json:"username"`
-	Format   string `json:"format,omitempty"`
+	ID              int64  `json:"id,omitempty"`
+	Platform        string `json:"platform"`
+	UserID          int64  `json:"user_id"`
+	ChatID          int64  `json:"chat_id"`
+	URL             string `json:"url"`
+	Source          string `json:"source"`
+	Username        string `json:"username"`
+	Format          string `json:"format,omitempty"`
+	StatusMessageID string `json:"status_message_id,omitempty"`
 }
 
 // VideoSource represents the source of a video

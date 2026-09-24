@@ -13,11 +13,12 @@ import (
 type MaxTransport struct{ api *maxbot.Api }
 
 func NewMaxTransport(api *maxbot.Api) *MaxTransport { return &MaxTransport{api: api} }
-func (m *MaxTransport) SendText(ctx context.Context, chatID int64, text string) error {
-	_, err := m.api.Messages.Send(ctx, maxbot.NewMessage().SetChat(chatID).SetText(text))
-	return err
+func (m *MaxTransport) SendText(ctx context.Context, chatID int64, text string) (MessageRef, error) {
+	result, err := m.api.Messages.Send(ctx, maxbot.NewMessage().SetChat(chatID).SetText(text))
+	if err != nil { return "", err }
+	return MessageRef(result.Message.Body.Mid), nil
 }
-func (m *MaxTransport) SendButtons(ctx context.Context, chatID int64, text string, rows [][]Button) error {
+func (m *MaxTransport) SendButtons(ctx context.Context, chatID int64, text string, rows [][]Button) (MessageRef, error) {
 	keyboard := maxmodel.NewKeyboard()
 	for _, row := range rows {
 		r := keyboard.AddRow()
@@ -25,7 +26,12 @@ func (m *MaxTransport) SendButtons(ctx context.Context, chatID int64, text strin
 			r.AddCallback(button.Text, maxmodel.IntentDefault, button.Callback)
 		}
 	}
-	_, err := m.api.Messages.Send(ctx, maxbot.NewMessage().SetChat(chatID).SetText(text).AddKeyboard(keyboard))
+	result, err := m.api.Messages.Send(ctx, maxbot.NewMessage().SetChat(chatID).SetText(text).AddKeyboard(keyboard))
+	if err != nil { return "", err }
+	return MessageRef(result.Message.Body.Mid), nil
+}
+func (m *MaxTransport) DeleteMessage(ctx context.Context, _ int64, ref MessageRef) error {
+	_, err := m.api.Messages.DeleteMessage(ctx, string(ref))
 	return err
 }
 func (m *MaxTransport) AnswerCallback(ctx context.Context, id string) error {

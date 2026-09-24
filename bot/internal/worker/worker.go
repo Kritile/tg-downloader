@@ -26,6 +26,7 @@ type WorkerPool struct {
 	workerCount  int
 	downloadRepo domain.DownloadRepository
 	proxyAddr    string
+	jobRepo      domain.JobRepository
 }
 
 func NewWorkerPool(
@@ -34,13 +35,19 @@ func NewWorkerPool(
 	workerCount int,
 	downloadRepo domain.DownloadRepository,
 	proxyAddr string,
+	jobRepos ...domain.JobRepository,
 ) *WorkerPool {
+	var jobRepo domain.JobRepository
+	if len(jobRepos) > 0 {
+		jobRepo = jobRepos[0]
+	}
 	return &WorkerPool{
 		queueService: queueService,
 		bot:          bot,
 		workerCount:  workerCount,
 		downloadRepo: downloadRepo,
 		proxyAddr:    proxyAddr,
+		jobRepo:      jobRepo,
 	}
 }
 
@@ -86,13 +93,22 @@ func (wp *WorkerPool) processJob(ctx context.Context, workerID int) {
 	}
 
 	log.Printf("Worker %d processing job for user %d, URL: %s", workerID, job.UserID, job.URL)
+	if wp.jobRepo != nil && job.ID > 0 {
+		_ = wp.jobRepo.MarkStarted(ctx, job.ID)
+	}
 
 	// Process with retries
 	err = wp.processWithRetry(ctx, job, workerID)
 	if err != nil {
+		wp.bot.DeleteMessage(job.Platform, job.ChatID, job.StatusMessageID)
 		log.Printf("Worker %d failed to process job after retries: %v", workerID, err)
 		wp.logFailedDownload(job.UserID, models.VideoSource(job.Source), job.URL)
 		wp.bot.SendDownloadFailed(job.Platform, job.ChatID)
+		if wp.jobRepo != nil && job.ID > 0 {
+			_ = wp.jobRepo.MarkFailed(ctx, job.ID, err.Error(), maxRetries)
+		}
+	} else if wp.jobRepo != nil && job.ID > 0 {
+		_ = wp.jobRepo.MarkCompleted(ctx, job.ID)
 	}
 }
 
@@ -190,6 +206,7 @@ func (wp *WorkerPool) executeDownload(ctx context.Context, job *models.DownloadJ
 		CleanupDownloadedFile(filePath)
 		return fmt.Errorf("failed to send video: %w", err)
 	}
+	wp.bot.DeleteMessage(job.Platform, job.ChatID, job.StatusMessageID)
 
 	// File is already deleted by SendVideo
 	return nil

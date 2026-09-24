@@ -14,6 +14,7 @@ import (
 	"github.com/mediaharvester/tg-downloader/admin/internal/transport"
 	"github.com/mediaharvester/tg-downloader/admin/internal/usecase"
 	"github.com/mediaharvester/tg-downloader/shared/config"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -42,6 +43,11 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	settingsRepo := repository.NewSettingsRepository(db)
 	downloadRepo := repository.NewDownloadRepository(db)
+	redisClient := initRedis(cfg.RedisURL)
+	if redisClient != nil {
+		defer redisClient.Close()
+	}
+	auditRepo := repository.NewAuditRepository(db)
 
 	// Initialize usecases
 	authService := usecase.NewAdminUserService(adminRepo)
@@ -58,12 +64,31 @@ func main() {
 		statsSvc,
 		settingsRepo,
 		cfg.SessionSecret,
+		downloadRepo,
+		redisClient,
+		auditRepo,
 	)
 
 	log.Printf("Admin panel starting on port %s", cfg.AdminPort)
 	if err := server.Run(cfg.AdminPort); err != nil {
 		log.Fatalf("Failed to start admin server: %v", err)
 	}
+}
+
+func initRedis(redisURL string) *redis.Client {
+	if redisURL == "" {
+		log.Println("REDIS_URL is not configured; Redis health is disabled")
+		return nil
+	}
+	opt, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse REDIS_URL: %v", err)
+	}
+	client := redis.NewClient(opt)
+	if err := client.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	return client
 }
 
 func initDatabase(databaseURL string) (*sql.DB, error) {

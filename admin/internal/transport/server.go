@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mediaharvester/tg-downloader/admin/internal/domain"
 	"github.com/mediaharvester/tg-downloader/shared/models"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -31,6 +33,9 @@ type AdminServer struct {
 	userMgmtSvc   domain.AdminUserManagementService
 	statsSvc      domain.AdminStatsService
 	settingsRepo  domain.SettingsRepository
+	downloadRepo  domain.DownloadRepository
+	redisClient   *redis.Client
+	auditRepo     domain.AuditRepository
 	baseTemplate  *template.Template
 	loginTemplate *template.Template
 	funcMap       template.FuncMap
@@ -42,6 +47,9 @@ func NewAdminServer(
 	statsSvc domain.AdminStatsService,
 	settingsRepo domain.SettingsRepository,
 	sessionSecret string,
+	downloadRepo domain.DownloadRepository,
+	redisClient *redis.Client,
+	auditRepo domain.AuditRepository,
 ) *AdminServer {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
@@ -78,6 +86,9 @@ func NewAdminServer(
 		userMgmtSvc:   userMgmtSvc,
 		statsSvc:      statsSvc,
 		settingsRepo:  settingsRepo,
+		downloadRepo:  downloadRepo,
+		redisClient:   redisClient,
+		auditRepo:     auditRepo,
 		baseTemplate:  baseTemplate,
 		loginTemplate: loginTemplate,
 		funcMap:       funcMap,
@@ -85,6 +96,19 @@ func NewAdminServer(
 
 	server.setupRoutes()
 	return server
+}
+
+func (s *AdminServer) audit(c *gin.Context, action, targetType, targetID string, details interface{}) {
+	if s.auditRepo == nil {
+		return
+	}
+	payload, err := json.Marshal(details)
+	if err != nil {
+		payload = []byte(`{}`)
+	}
+	admin, _ := c.Get("admin_id")
+	adminID, _ := admin.(int64)
+	_ = s.auditRepo.Create(c.Request.Context(), adminID, action, targetType, targetID, string(payload), c.ClientIP(), c.GetHeader("User-Agent"))
 }
 
 func securityHeadersMiddleware() gin.HandlerFunc {
@@ -151,6 +175,8 @@ func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H
 		title = "Settings"
 	case "stats.html":
 		title = "Statistics"
+	case "jobs.html":
+		title = "Jobs"
 	}
 	data["title"] = title
 	data["content"] = template.HTML(contentBuf.String())
@@ -162,7 +188,21 @@ func (s *AdminServer) renderPage(c *gin.Context, templateName string, data gin.H
 
 func (s *AdminServer) setupRoutes() {
 	s.engine.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "healthy"})
+		status := "healthy"
+		checks := gin.H{"database": "healthy"}
+		if s.redisClient != nil {
+			if err := s.redisClient.Ping(c.Request.Context()).Err(); err != nil {
+				status = "degraded"
+				checks["redis"] = err.Error()
+			} else {
+				checks["redis"] = "healthy"
+			}
+		}
+		code := http.StatusOK
+		if status != "healthy" {
+			code = http.StatusServiceUnavailable
+		}
+		c.JSON(code, gin.H{"status": status, "checks": checks})
 	})
 
 	s.engine.GET("/", s.handleLoginGET)
@@ -178,6 +218,8 @@ func (s *AdminServer) setupRoutes() {
 		protected.GET("/settings", s.handleSettings)
 		protected.POST("/settings", s.handleSettingsUpdate)
 		protected.GET("/stats", s.handleStats)
+		protected.GET("/jobs", s.handleJobs)
+		protected.POST("/users/:id/block", s.handleBlockUser)
 		protected.POST("/change-password", s.handleChangePassword)
 		protected.POST("/logout", s.handleLogout)
 	}
@@ -270,6 +312,10 @@ func (s *AdminServer) handleDashboard(c *gin.Context) {
 	if totalUsers > 0 {
 		avgPerUser = float64(month) / float64(totalUsers)
 	}
+	var queueLength int64
+	if s.redisClient != nil {
+		queueLength, _ = s.redisClient.LLen(ctx, "download_queue").Result()
+	}
 
 	s.renderPage(c, "dashboard.html", gin.H{
 		"downloads_today":  today,
@@ -278,21 +324,26 @@ func (s *AdminServer) handleDashboard(c *gin.Context) {
 		"avg_per_user":     avgPerUser,
 		"current_page":     "dashboard",
 		"security_posture": "CSRF + rate limit + security headers enabled",
+		"queue_length":     queueLength,
 	})
 }
 
 func (s *AdminServer) handleUsers(c *gin.Context) {
 	ctx := c.Request.Context()
 	query := c.Query("q")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * defaultPagination
 	users := []*models.User{}
 	total := 0
 	var err error
 
 	if query != "" {
-		users, err = s.userMgmtSvc.SearchUsers(ctx, query, defaultPagination)
-		total = len(users)
+		users, total, err = s.userMgmtSvc.SearchUsersPage(ctx, query, defaultPagination, offset)
 	} else {
-		users, total, err = s.userMgmtSvc.GetAllUsers(ctx, defaultPagination, 0)
+		users, total, err = s.userMgmtSvc.GetAllUsers(ctx, defaultPagination, offset)
 	}
 	if err != nil {
 		users = []*models.User{}
@@ -302,10 +353,31 @@ func (s *AdminServer) handleUsers(c *gin.Context) {
 		"users":        users,
 		"query":        query,
 		"total":        total,
+		"page":         page,
+		"pages":        (total + defaultPagination - 1) / defaultPagination,
 		"success":      c.Query("success"),
 		"error":        c.Query("error"),
 		"current_page": "users",
 	})
+}
+
+func (s *AdminServer) handleBlockUser(c *gin.Context) {
+	if !s.verifyCSRF(c) {
+		c.Redirect(http.StatusSeeOther, "/users?error=csrf")
+		return
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, "/users?error=invalid_user")
+		return
+	}
+	blocked := c.PostForm("blocked") == "true"
+	if err := s.userMgmtSvc.SetUserBlocked(c.Request.Context(), id, blocked); err != nil {
+		c.Redirect(http.StatusSeeOther, "/users?error=block_failed")
+		return
+	}
+	s.audit(c, "user.block", "user", c.Param("id"), gin.H{"blocked": blocked})
+	c.Redirect(http.StatusSeeOther, "/users?success=blocked")
 }
 
 func (s *AdminServer) handleUpdatePermissions(c *gin.Context) {
@@ -339,6 +411,7 @@ func (s *AdminServer) handleUpdatePermissions(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/users?error=update_permissions")
 		return
 	}
+	s.audit(c, "user.permissions.update", "user", c.Param("id"), gin.H{"youtube": c.PostForm("can_youtube"), "instagram": c.PostForm("can_instagram"), "tiktok": c.PostForm("can_tiktok")})
 	c.Redirect(http.StatusSeeOther, "/users?success=permissions")
 }
 
@@ -379,6 +452,7 @@ func (s *AdminServer) handleUpdateLimits(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/users?error=update_limits")
 		return
 	}
+	s.audit(c, "user.limits.update", "user", c.Param("id"), gin.H{"daily": dailyLimit, "monthly": monthlyLimit})
 	c.Redirect(http.StatusSeeOther, "/users?success=limits")
 }
 
@@ -432,6 +506,7 @@ func (s *AdminServer) handleSettingsUpdate(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/settings?error=update_failed")
 		return
 	}
+	s.audit(c, "settings.update", "settings", "1", settings)
 
 	c.Redirect(http.StatusSeeOther, "/settings?success=1")
 }
@@ -453,6 +528,21 @@ func (s *AdminServer) handleStats(c *gin.Context) {
 		"downloads_source": bySource,
 		"current_page":     "stats",
 	})
+}
+
+func (s *AdminServer) handleJobs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	limit := defaultPagination
+	offset := (page - 1) * limit
+	status, source, platform := c.Query("status"), c.Query("source"), c.Query("platform")
+	jobs, total, err := s.downloadRepo.List(c.Request.Context(), status, source, platform, limit, offset)
+	if err != nil {
+		jobs = []*models.DownloadJobRecord{}
+	}
+	s.renderPage(c, "jobs.html", gin.H{"jobs": jobs, "total": total, "page": page, "pages": (total + limit - 1) / limit, "status": status, "source": source, "platform": platform, "error": err, "current_page": "jobs"})
 }
 
 func (s *AdminServer) handleChangePassword(c *gin.Context) {
@@ -485,6 +575,7 @@ func (s *AdminServer) handleChangePassword(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/settings?error=password_update")
 		return
 	}
+	s.audit(c, "admin.password.change", "admin", strconv.FormatInt(id, 10), gin.H{})
 
 	c.Redirect(http.StatusSeeOther, "/settings?success=password")
 }

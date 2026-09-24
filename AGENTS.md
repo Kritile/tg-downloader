@@ -238,6 +238,16 @@ test(limits): add daily/monthly limit tests
 refactor(domain): extract permission service
 ```
 
+## Deployment environment
+
+* Production server: `vm-kritile`
+* Application directory on the server: `/home/user1/tg-downloader`
+* Deployment is performed on the server with Docker Compose; source changes are committed before rebuilding services.
+* Main production services: `bot`, `admin`, `postgres`, `redis`, `telegram-bot-api`, and `telegram-vpn`.
+* Admin panel: `https://task-pilot.ru/`; task tracker: `https://tracker.task-pilot.ru/`.
+* Local Telegram Bot API is used for Telegram traffic. Do not switch bot requests to `api.telegram.org` unless explicitly requested.
+* YouTube, TikTok, Instagram/Reels traffic must follow the proxy requirements configured for the production bot; preserve the existing Local API and proxy routing when deploying.
+
 ---
 
 # 15️⃣ CLEAN ARCHITECTURE
@@ -270,5 +280,3 @@ cmd/
 * Files deleted after sending
 * Docker-compose runs all services cleanly
 * Tests pass
-
-

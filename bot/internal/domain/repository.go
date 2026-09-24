@@ -14,6 +14,13 @@ type UserRepository interface {
 	UpdateAutoBestDownload(ctx context.Context, userID int64, autoBest *bool) error
 }
 
+type JobRepository interface {
+	Create(ctx context.Context, job *models.DownloadJobRecord) error
+	MarkStarted(ctx context.Context, id int64) error
+	MarkCompleted(ctx context.Context, id int64) error
+	MarkFailed(ctx context.Context, id int64, message string, retries int) error
+}
+
 type DownloadRepository interface {
 	Create(ctx context.Context, download *models.Download) error
 	GetDailyCount(ctx context.Context, userID int64) (int, error)

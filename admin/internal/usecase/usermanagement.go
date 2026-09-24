@@ -81,3 +81,11 @@ func (s *adminUserManagementService) SearchUsers(ctx context.Context, query stri
 	}
 	return s.userRepo.SearchByTelegramID(ctx, telegramID, limit)
 }
+
+func (s *adminUserManagementService) SearchUsersPage(ctx context.Context, query string, limit, offset int) ([]*models.User, int, error) {
+	return s.userRepo.Search(ctx, query, limit, offset)
+}
+
+func (s *adminUserManagementService) SetUserBlocked(ctx context.Context, userID int64, blocked bool) error {
+	return s.userRepo.SetBlocked(ctx, userID, blocked)
+}

@@ -39,6 +39,7 @@ type URLValidator interface {
 // Notifier defines the interface for sending messages to users
 type Notifier interface {
 	SendVideo(platform string, chatID int64, filePath string) error
+	DeleteMessage(platform string, chatID int64, messageID string)
 	SendFileTooLarge(platform string, chatID int64)
 	SendDownloadFailed(platform string, chatID int64)
 }

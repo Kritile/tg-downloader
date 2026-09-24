@@ -20,7 +20,7 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 
 func (r *userRepository) GetByTelegramID(ctx context.Context, telegramID int64) (*models.User, error) {
 	query := `
-		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, auto_best_download, created_at, updated_at
+		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, auto_best_download, is_blocked, last_seen_at, created_at, updated_at
 		FROM users
 		WHERE telegram_id = $1
 	`
@@ -39,6 +39,8 @@ func (r *userRepository) GetByTelegramID(ctx context.Context, telegramID int64) 
 		&dailyLimit,
 		&monthlyLimit,
 		&autoBest,
+		&user.IsBlocked,
+		&user.LastSeenAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -96,8 +98,8 @@ func (r *userRepository) GetByTelegramID(ctx context.Context, telegramID int64) 
 
 func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 	query := `
-		INSERT INTO users (telegram_id, username, auto_best_download, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (telegram_id, username, auto_best_download, last_seen_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id
 	`
 
@@ -107,14 +109,14 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 		autoBest = *user.AutoBestDownload
 	}
 
-	err := r.db.QueryRowContext(ctx, query, user.TelegramID, user.Username, autoBest, now, now).Scan(&user.ID)
+	err := r.db.QueryRowContext(ctx, query, user.TelegramID, user.Username, autoBest, now, now, now).Scan(&user.ID)
 	return err
 }
 
 func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
 		UPDATE users
-		SET username = $2, can_youtube = $3, can_instagram = $4, can_tiktok = $5, daily_limit = $6, monthly_limit = $7, auto_best_download = $8, updated_at = $9
+		SET username = $2, can_youtube = $3, can_instagram = $4, can_tiktok = $5, daily_limit = $6, monthly_limit = $7, auto_best_download = $8, is_blocked = $9, last_seen_at = $10, updated_at = $11
 		WHERE id = $1
 	`
 
@@ -168,6 +170,8 @@ func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 			dailyLimit,
 			monthlyLimit,
 			autoBest,
+			user.IsBlocked,
+			time.Now(),
 			now,
 		)
 	}
@@ -184,6 +188,10 @@ func (r *userRepository) UpdateAutoBestDownload(ctx context.Context, userID int6
 func (r *userRepository) GetOrCreate(ctx context.Context, telegramID int64, username string) (*models.User, error) {
 	user, err := r.GetByTelegramID(ctx, telegramID)
 	if err == nil {
+		_, _ = r.db.ExecContext(ctx, `UPDATE users SET username = $2, last_seen_at = NOW(), updated_at = NOW() WHERE id = $1`, user.ID, username)
+		user.Username = username
+		now := time.Now()
+		user.LastSeenAt = &now
 		return user, nil
 	}
 

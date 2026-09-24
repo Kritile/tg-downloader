@@ -200,7 +200,7 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 
 func (r *userRepository) GetByID(ctx context.Context, id int64) (*models.User, error) {
 	query := `
-		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, created_at, updated_at
+		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, is_blocked, last_seen_at, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
@@ -218,6 +218,8 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*models.User, e
 		&canTiktok,
 		&dailyLimit,
 		&monthlyLimit,
+		&user.IsBlocked,
+		&user.LastSeenAt,
 		&user.CreatedAt,
 		&user.UpdatedAt,
 	)
@@ -258,7 +260,7 @@ func (r *userRepository) GetAll(ctx context.Context, limit, offset int) ([]*mode
 	}
 
 	query := `
-		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, created_at, updated_at
+		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, is_blocked, last_seen_at, created_at, updated_at
 		FROM users
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2
@@ -274,7 +276,7 @@ func (r *userRepository) GetAll(ctx context.Context, limit, offset int) ([]*mode
 		var user models.User
 		var canYoutube, canInstagram, canTiktok sql.NullBool
 		var dailyLimit, monthlyLimit sql.NullInt32
-		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canInstagram, &canTiktok, &dailyLimit, &monthlyLimit, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canInstagram, &canTiktok, &dailyLimit, &monthlyLimit, &user.IsBlocked, &user.LastSeenAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		if canYoutube.Valid {
@@ -302,7 +304,7 @@ func (r *userRepository) GetAll(ctx context.Context, limit, offset int) ([]*mode
 
 func (r *userRepository) SearchByTelegramID(ctx context.Context, telegramID int64, limit int) ([]*models.User, error) {
 	query := `
-		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, created_at, updated_at
+		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, is_blocked, last_seen_at, created_at, updated_at
 		FROM users
 		WHERE telegram_id = $1
 		LIMIT $2
@@ -318,7 +320,7 @@ func (r *userRepository) SearchByTelegramID(ctx context.Context, telegramID int6
 		var user models.User
 		var canYoutube, canInstagram, canTiktok sql.NullBool
 		var dailyLimit, monthlyLimit sql.NullInt32
-		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canInstagram, &canTiktok, &dailyLimit, &monthlyLimit, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		if err := rows.Scan(&user.ID, &user.TelegramID, &user.Username, &canYoutube, &canInstagram, &canTiktok, &dailyLimit, &monthlyLimit, &user.IsBlocked, &user.LastSeenAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if canYoutube.Valid {
@@ -342,6 +344,66 @@ func (r *userRepository) SearchByTelegramID(ctx context.Context, telegramID int6
 	}
 
 	return users, rows.Err()
+}
+
+func (r *userRepository) Search(ctx context.Context, query string, limit, offset int) ([]*models.User, int, error) {
+	pattern := "%" + query + "%"
+	var total int
+	if err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE CAST(telegram_id AS TEXT) ILIKE $1 OR COALESCE(username, '') ILIKE $1`, pattern).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, telegram_id, username, can_youtube, can_instagram, can_tiktok, daily_limit, monthly_limit, is_blocked, last_seen_at, created_at, updated_at
+		FROM users
+		WHERE CAST(telegram_id AS TEXT) ILIKE $1 OR COALESCE(username, '') ILIKE $1
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3`, pattern, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	users := make([]*models.User, 0)
+	for rows.Next() {
+		var u models.User
+		var yt, ig, tt sql.NullBool
+		var dl, ml sql.NullInt32
+		if err := rows.Scan(&u.ID, &u.TelegramID, &u.Username, &yt, &ig, &tt, &dl, &ml, &u.IsBlocked, &u.LastSeenAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		if yt.Valid {
+			u.CanYoutube = &yt.Bool
+		}
+		if ig.Valid {
+			u.CanInstagram = &ig.Bool
+		}
+		if tt.Valid {
+			u.CanTiktok = &tt.Bool
+		}
+		if dl.Valid {
+			v := int(dl.Int32)
+			u.DailyLimit = &v
+		}
+		if ml.Valid {
+			v := int(ml.Int32)
+			u.MonthlyLimit = &v
+		}
+		users = append(users, &u)
+	}
+	return users, total, rows.Err()
+}
+
+func (r *userRepository) SetBlocked(ctx context.Context, userID int64, blocked bool) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE users SET is_blocked = $2, updated_at = NOW() WHERE id = $1`, userID, blocked)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
 }
 
 func (r *userRepository) GetByTelegramID(ctx context.Context, telegramID int64) (*models.User, error) {

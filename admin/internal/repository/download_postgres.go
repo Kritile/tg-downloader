@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
 
 	"github.com/mediaharvester/tg-downloader/admin/internal/domain"
 	"github.com/mediaharvester/tg-downloader/shared/models"
@@ -164,4 +166,38 @@ func (r *downloadRepository) GetDownloadsBySource(ctx context.Context) (map[stri
 	}
 
 	return stats, rows.Err()
+}
+
+func (r *downloadRepository) List(ctx context.Context, status, source, platform string, limit, offset int) ([]*models.DownloadJobRecord, int, error) {
+	conditions := []string{"1=1"}
+	args := make([]interface{}, 0, 5)
+	arg := 1
+	for _, filter := range []struct{ value, column string }{{status, "status"}, {source, "source"}, {platform, "platform"}} {
+		if filter.value != "" {
+			conditions = append(conditions, fmt.Sprintf("%s = $%d", filter.column, arg))
+			args = append(args, filter.value)
+			arg++
+		}
+	}
+	where := strings.Join(conditions, " AND ")
+	var total int
+	if err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM download_jobs WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	query := "SELECT id, platform, user_id, chat_id, url, source, format, status, retry_count, error_message, status_message_id, queued_at, started_at, completed_at, updated_at FROM download_jobs WHERE " + where + fmt.Sprintf(" ORDER BY queued_at DESC LIMIT $%d OFFSET $%d", arg, arg+1)
+	args = append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	jobs := make([]*models.DownloadJobRecord, 0)
+	for rows.Next() {
+		var j models.DownloadJobRecord
+		if err := rows.Scan(&j.ID, &j.Platform, &j.UserID, &j.ChatID, &j.URL, &j.Source, &j.Format, &j.Status, &j.RetryCount, &j.ErrorMessage, &j.StatusMessageID, &j.QueuedAt, &j.StartedAt, &j.CompletedAt, &j.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		jobs = append(jobs, &j)
+	}
+	return jobs, total, rows.Err()
 }

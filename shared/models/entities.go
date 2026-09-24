@@ -3,17 +3,37 @@ package models
 import "time"
 
 type User struct {
-	ID               int64     `json:"id"`
-	TelegramID       int64     `json:"telegram_id"`
-	Username         string    `json:"username"`
-	CanYoutube       *bool     `json:"can_youtube"`
-	CanInstagram     *bool     `json:"can_instagram"`
-	CanTiktok        *bool     `json:"can_tiktok"`
-	DailyLimit       *int      `json:"daily_limit"`
-	MonthlyLimit     *int      `json:"monthly_limit"`
-	AutoBestDownload *bool     `json:"auto_best_download"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               int64      `json:"id"`
+	TelegramID       int64      `json:"telegram_id"`
+	Username         string     `json:"username"`
+	CanYoutube       *bool      `json:"can_youtube"`
+	CanInstagram     *bool      `json:"can_instagram"`
+	CanTiktok        *bool      `json:"can_tiktok"`
+	DailyLimit       *int       `json:"daily_limit"`
+	MonthlyLimit     *int       `json:"monthly_limit"`
+	AutoBestDownload *bool      `json:"auto_best_download"`
+	IsBlocked        bool       `json:"is_blocked"`
+	LastSeenAt       *time.Time `json:"last_seen_at"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type DownloadJobRecord struct {
+	ID              int64      `json:"id"`
+	Platform        string     `json:"platform"`
+	UserID          int64      `json:"user_id"`
+	ChatID          int64      `json:"chat_id"`
+	URL             string     `json:"url"`
+	Source          string     `json:"source"`
+	Format          string     `json:"format"`
+	Status          string     `json:"status"`
+	RetryCount      int        `json:"retry_count"`
+	ErrorMessage    string     `json:"error_message"`
+	StatusMessageID string     `json:"status_message_id"`
+	QueuedAt        time.Time  `json:"queued_at"`
+	StartedAt       *time.Time `json:"started_at"`
+	CompletedAt     *time.Time `json:"completed_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
 type Download struct {

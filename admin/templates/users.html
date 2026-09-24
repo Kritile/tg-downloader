@@ -9,7 +9,7 @@
 
 <div class="bg-white rounded-lg shadow p-6 mb-6">
     <form action="/users" method="GET" class="flex space-x-4">
-        <input type="text" name="q" placeholder="Search by Telegram ID..." value="{{ .query }}" class="flex-1 border border-gray-300 rounded-lg px-4 py-2">
+        <input type="text" name="q" placeholder="Search by Telegram ID or username..." value="{{ .query }}" class="flex-1 border border-gray-300 rounded-lg px-4 py-2">
         <button type="submit" class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition">Search</button>
     </form>
     <p class="text-xs text-gray-500 mt-3">Found users: {{ .total }}</p>
@@ -23,6 +23,11 @@
                 <p class="font-semibold text-gray-800">{{ .Username }} (ID: {{ .TelegramID }})</p>
                 <p class="text-xs text-gray-500">Internal ID: {{ .ID }}</p>
             </div>
+            <form action="/users/{{ .ID }}/block" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ $.csrf_token }}">
+                <input type="hidden" name="blocked" value="{{ if .IsBlocked }}false{{ else }}true{{ end }}">
+                <button class="px-3 py-1 rounded text-white {{ if .IsBlocked }}bg-green-600 hover:bg-green-700{{ else }}bg-red-600 hover:bg-red-700{{ end }}">{{ if .IsBlocked }}Unblock{{ else }}Block{{ end }}</button>
+            </form>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <form action="/users/{{ .ID }}/update-permissions" method="POST" class="border rounded p-3">
@@ -64,4 +69,11 @@
     <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">No users found</div>
 {{ end }}
 </div>
+{{ if gt .pages 1 }}
+<div class="flex gap-2 mt-6">
+    {{ if gt .page 1 }}<a class="bg-white border px-3 py-2 rounded" href="/users?q={{ .query }}&page={{ sub .page 1 }}">Previous</a>{{ end }}
+    <span class="px-3 py-2 text-gray-600">Page {{ .page }} of {{ .pages }}</span>
+    {{ if lt .page .pages }}<a class="bg-white border px-3 py-2 rounded" href="/users?q={{ .query }}&page={{ add .page 1 }}">Next</a>{{ end }}
+</div>
+{{ end }}
 {{ end }}

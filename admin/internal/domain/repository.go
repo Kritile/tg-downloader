@@ -29,12 +29,18 @@ type UserRepository interface {
 	GetByTelegramID(ctx context.Context, telegramID int64) (*models.User, error)
 	GetAll(ctx context.Context, limit, offset int) ([]*models.User, int, error)
 	SearchByTelegramID(ctx context.Context, telegramID int64, limit int) ([]*models.User, error)
+	Search(ctx context.Context, query string, limit, offset int) ([]*models.User, int, error)
+	SetBlocked(ctx context.Context, userID int64, blocked bool) error
 	Update(ctx context.Context, user *models.User) error
 }
 
 type SettingsRepository interface {
 	Get(ctx context.Context) (*models.Settings, error)
 	Update(ctx context.Context, settings *models.Settings) error
+}
+
+type AuditRepository interface {
+	Create(ctx context.Context, adminID int64, action, targetType, targetID, details, ip, userAgent string) error
 }
 
 type DownloadRepository interface {
@@ -45,6 +51,7 @@ type DownloadRepository interface {
 	GetTopUsers(ctx context.Context, limit int) ([]*models.User, []int, error)
 	GetTotalUsers(ctx context.Context) (int, error)
 	GetDownloadsBySource(ctx context.Context) (map[string]int, error)
+	List(ctx context.Context, status, source, platform string, limit, offset int) ([]*models.DownloadJobRecord, int, error)
 }
 
 // Service interfaces
@@ -65,6 +72,8 @@ type AdminUserManagementService interface {
 	UpdateUserLimits(ctx context.Context, userID int64, dailyLimit, monthlyLimit *int) error
 	GetAllUsers(ctx context.Context, limit, offset int) ([]*models.User, int, error)
 	SearchUsers(ctx context.Context, query string, limit int) ([]*models.User, error)
+	SearchUsersPage(ctx context.Context, query string, limit, offset int) ([]*models.User, int, error)
+	SetUserBlocked(ctx context.Context, userID int64, blocked bool) error
 }
 
 type AdminStatsService interface {

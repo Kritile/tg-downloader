@@ -51,6 +51,7 @@ func main() {
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	downloadRepo := repository.NewDownloadRepository(db)
+	jobRepo := repository.NewJobRepository(db)
 	settingsRepo := repository.NewSettingsRepository(db)
 
 	// Initialize usecases
@@ -58,10 +59,10 @@ func main() {
 	permissionSvc := usecase.NewPermissionService(settingsRepo)
 	limitSvc := usecase.NewLimitService(downloadRepo, settingsRepo)
 	userService := usecase.NewUserService(userRepo)
-	formatSvc := usecase.NewFormatService(cfg.XraySocks5Proxy)
+	formatSvc := usecase.NewFormatService(cfg.XraySocks5Proxy, redisClient)
 
 	// Initialize queue service
-	queueService := worker.NewQueueService(redisClient)
+	queueService := worker.NewQueueService(redisClient, jobRepo)
 
 	// Initialize bot
 	var telegramTransport *transport.TelegramTransport
@@ -107,7 +108,7 @@ func main() {
 	notifier := transport.NewNotifierRouter(telegramBot, maxBot)
 
 	// Initialize worker pool
-	workerPool := worker.NewWorkerPool(queueService, notifier, cfg.WorkerCount, downloadRepo, cfg.XraySocks5Proxy)
+	workerPool := worker.NewWorkerPool(queueService, notifier, cfg.WorkerCount, downloadRepo, cfg.XraySocks5Proxy, jobRepo)
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())

@@ -12,7 +12,12 @@ import (
 // outbound TDLib traffic through the configured SOCKS5 proxy. MAX has its own
 // direct client and never calls this function.
 func initTelegramBotAPILocal(token, endpoint string) (*tgbotapi.BotAPI, error) {
-	return tgbotapi.NewBotAPIWithClient(token, telegramAPIEndpoint(endpoint), &http.Client{})
+	transport := &http.Transport{
+		DisableKeepAlives:  true,
+		DisableCompression: true,
+		ForceAttemptHTTP2:  false,
+	}
+	return tgbotapi.NewBotAPIWithClient(token, telegramAPIEndpoint(endpoint), &http.Client{Transport: transport})
 }
 
 // telegramAPIEndpoint accepts either a Local Bot API base URL or the complete

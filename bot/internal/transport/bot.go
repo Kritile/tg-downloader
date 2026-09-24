@@ -38,9 +38,12 @@ type Button struct {
 	Callback string
 }
 
+type MessageRef string
+
 type Messenger interface {
-	SendText(context.Context, int64, string) error
-	SendButtons(context.Context, int64, string, [][]Button) error
+	SendText(context.Context, int64, string) (MessageRef, error)
+	SendButtons(context.Context, int64, string, [][]Button) (MessageRef, error)
+	DeleteMessage(context.Context, int64, MessageRef) error
 	AnswerCallback(context.Context, string) error
 	SendVideo(context.Context, int64, string) error
 }
@@ -58,11 +61,12 @@ type Bot struct {
 	mu            sync.Mutex
 }
 type pendingDownload struct {
-	UserID   int64
-	ChatID   int64
-	URL      string
-	Source   string
-	Username string
+	UserID         int64
+	ChatID         int64
+	URL            string
+	Source         string
+	Username       string
+	FormatsMessage MessageRef
 }
 
 func NewBot(platform string, m Messenger, v domain.URLValidator, q *worker.QueueService, u domain.UserService, p domain.PermissionService, l domain.LimitService, f domain.FormatService, _ string) *Bot {
@@ -150,7 +154,7 @@ func (b *Bot) limits(ctx context.Context, m Message) {
 	b.text(ctx, m.ChatID, fmt.Sprintf("📊 Limits:\n• Today: %d/%d\n• This month: %d/%d", d, dl, mo, ml))
 }
 func (b *Bot) modeButtons(ctx context.Context, chatID int64, title string) {
-	_ = b.messenger.SendButtons(ctx, chatID, title, [][]Button{{{Text: "⚡ Automatic (best quality)", Callback: callbackModeAuto}}, {{Text: "🎛️ Choose quality manually", Callback: callbackModeManual}}})
+	_, _ = b.messenger.SendButtons(ctx, chatID, title, [][]Button{{{Text: "⚡ Automatic (best quality)", Callback: callbackModeAuto}}, {{Text: "🎛️ Choose quality manually", Callback: callbackModeManual}}})
 }
 
 func (b *Bot) url(ctx context.Context, m Message) {
@@ -166,6 +170,10 @@ func (b *Bot) url(ctx context.Context, m Message) {
 	}
 	if user.AutoBestDownload == nil {
 		b.modeButtons(ctx, m.ChatID, "Choose automatic or manual quality before the first download.")
+		return
+	}
+	if user.IsBlocked {
+		b.text(ctx, m.ChatID, "⛔ Your account is blocked. Please contact the administrator.")
 		return
 	}
 	ok, err := b.permissionSvc.CheckPermission(ctx, user, source)
@@ -200,19 +208,36 @@ func (b *Bot) url(ctx context.Context, m Message) {
 		return
 	}
 	b.mu.Lock()
-	b.pendingURLs[m.ChatID] = &pendingDownload{UserID: user.ID, ChatID: m.ChatID, URL: m.Text, Source: string(source), Username: m.Username}
+	// Queue jobs carry the external user ID; the job repository resolves it to
+	// users.id when writing the download_jobs foreign key.
+	b.pendingURLs[m.ChatID] = &pendingDownload{UserID: m.UserID, ChatID: m.ChatID, URL: m.Text, Source: string(source), Username: m.Username}
 	b.mu.Unlock()
-	b.text(ctx, m.ChatID, "🔍 Fetching available formats... Please wait.")
+	fetchRef, fetchErr := b.messenger.SendText(ctx, m.ChatID, "🔍 Fetching available formats... Please wait.")
+	if fetchErr != nil {
+		log.Printf("send message: %v", fetchErr)
+	}
 	formats, err := b.formatSvc.ListFormats(ctx, m.Text, source)
 	if err != nil || len(formats) == 0 {
+		b.deleteMessage(ctx, m.ChatID, fetchRef)
 		b.text(ctx, m.ChatID, "⚠️ Could not fetch formats. Downloading with best quality...")
 		b.queue(ctx, m, string(source), "")
 		return
 	}
-	_ = b.SendFormatSelection(ctx, m.ChatID, formats)
+	b.deleteMessage(ctx, m.ChatID, fetchRef)
+	formatsRef, err := b.SendFormatSelection(ctx, m.ChatID, formats)
+	if err != nil {
+		b.text(ctx, m.ChatID, "⚠️ Could not show formats. Downloading with best quality...")
+		b.queue(ctx, m, string(source), "")
+		return
+	}
+	b.mu.Lock()
+	if pending := b.pendingURLs[m.ChatID]; pending != nil {
+		pending.FormatsMessage = formatsRef
+	}
+	b.mu.Unlock()
 }
 
-func (b *Bot) SendFormatSelection(ctx context.Context, chatID int64, formats []models.VideoFormat) error {
+func (b *Bot) SendFormatSelection(ctx context.Context, chatID int64, formats []models.VideoFormat) (MessageRef, error) {
 	max := len(formats)
 	if max > 10 {
 		max = 10
@@ -239,18 +264,33 @@ func (b *Bot) selectFormat(ctx context.Context, chatID int64, format string) {
 		b.text(ctx, chatID, "❌ Session expired. Please send the URL again.")
 		return
 	}
+	b.deleteMessage(ctx, chatID, p.FormatsMessage)
 	b.queue(ctx, Message{UserID: p.UserID, ChatID: p.ChatID, Username: p.Username, Text: p.URL}, p.Source, format)
 }
 func (b *Bot) queue(ctx context.Context, m Message, source, format string) {
-	if err := b.queueService.PushJob(ctx, &models.DownloadJob{Platform: b.platform, UserID: m.UserID, ChatID: m.ChatID, URL: m.Text, Source: source, Username: m.Username, Format: format}); err != nil {
+	statusRef, err := b.messenger.SendText(ctx, m.ChatID, "⬇️ Downloading your video... Please wait.")
+	if err != nil {
+		log.Printf("send message: %v", err)
+	}
+	if err := b.queueService.PushJob(ctx, &models.DownloadJob{Platform: b.platform, UserID: m.UserID, ChatID: m.ChatID, URL: m.Text, Source: source, Username: m.Username, Format: format, StatusMessageID: string(statusRef)}); err != nil {
+		b.deleteMessage(ctx, m.ChatID, statusRef)
 		b.error(ctx, m.ChatID, err)
 		return
 	}
-	b.text(ctx, m.ChatID, "⬇️ Downloading your video... Please wait.")
 }
-func (b *Bot) text(ctx context.Context, chatID int64, s string) {
-	if err := b.messenger.SendText(ctx, chatID, s); err != nil {
+func (b *Bot) text(ctx context.Context, chatID int64, s string) MessageRef {
+	ref, err := b.messenger.SendText(ctx, chatID, s)
+	if err != nil {
 		log.Printf("send message: %v", err)
+	}
+	return ref
+}
+func (b *Bot) deleteMessage(ctx context.Context, chatID int64, ref MessageRef) {
+	if ref == "" {
+		return
+	}
+	if err := b.messenger.DeleteMessage(ctx, chatID, ref); err != nil {
+		log.Printf("delete message %s: %v", ref, err)
 	}
 }
 func (b *Bot) error(ctx context.Context, chatID int64, err error) {
@@ -265,6 +305,11 @@ func (b *Bot) SendVideo(platform string, chatID int64, path string) error {
 		return fmt.Errorf("platform %s is not handled by %s transport", platform, b.platform)
 	}
 	return b.messenger.SendVideo(context.Background(), chatID, path)
+}
+func (b *Bot) DeleteMessage(platform string, chatID int64, messageID string) {
+	if platform == b.platform {
+		b.deleteMessage(context.Background(), chatID, MessageRef(messageID))
+	}
 }
 func (b *Bot) SendFileTooLarge(platform string, chatID int64) {
 	if platform == b.platform {
@@ -298,6 +343,11 @@ func (r *NotifierRouter) SendVideo(platform string, chatID int64, path string) e
 		return fmt.Errorf("no notifier for platform %s", platform)
 	}
 	return bot.SendVideo(platform, chatID, path)
+}
+func (r *NotifierRouter) DeleteMessage(platform string, chatID int64, messageID string) {
+	if bot := r.bots[platform]; bot != nil {
+		bot.DeleteMessage(platform, chatID, messageID)
+	}
 }
 func (r *NotifierRouter) SendFileTooLarge(platform string, chatID int64) {
 	if bot := r.bots[platform]; bot != nil {

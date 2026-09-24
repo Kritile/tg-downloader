@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/mediaharvester/tg-downloader/bot/internal/usecase"
@@ -27,11 +28,12 @@ func (p localFilePath) SendData() string { return "file://" + string(p) }
 func NewTelegramTransport(api *tgbotapi.BotAPI) *TelegramTransport {
 	return &TelegramTransport{api: api}
 }
-func (t *TelegramTransport) SendText(_ context.Context, chatID int64, text string) error {
-	_, err := t.api.Send(tgbotapi.NewMessage(chatID, text))
-	return err
+func (t *TelegramTransport) SendText(_ context.Context, chatID int64, text string) (MessageRef, error) {
+	msg, err := t.api.Send(tgbotapi.NewMessage(chatID, text))
+	if err != nil { return "", err }
+	return MessageRef(strconv.Itoa(msg.MessageID)), nil
 }
-func (t *TelegramTransport) SendButtons(_ context.Context, chatID int64, text string, rows [][]Button) error {
+func (t *TelegramTransport) SendButtons(_ context.Context, chatID int64, text string, rows [][]Button) (MessageRef, error) {
 	keyboard := make([][]tgbotapi.InlineKeyboardButton, 0, len(rows))
 	for _, row := range rows {
 		out := make([]tgbotapi.InlineKeyboardButton, 0, len(row))
@@ -42,7 +44,14 @@ func (t *TelegramTransport) SendButtons(_ context.Context, chatID int64, text st
 	}
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
-	_, err := t.api.Send(msg)
+	sent, err := t.api.Send(msg)
+	if err != nil { return "", err }
+	return MessageRef(strconv.Itoa(sent.MessageID)), nil
+}
+func (t *TelegramTransport) DeleteMessage(_ context.Context, chatID int64, ref MessageRef) error {
+	id, err := strconv.Atoi(string(ref))
+	if err != nil { return err }
+	_, err = t.api.Request(tgbotapi.DeleteMessageConfig{ChatID: chatID, MessageID: id})
 	return err
 }
 func (t *TelegramTransport) AnswerCallback(_ context.Context, id string) error {

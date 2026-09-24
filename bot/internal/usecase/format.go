@@ -3,6 +3,7 @@ package usecase
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -10,38 +11,74 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mediaharvester/tg-downloader/bot/internal/domain"
 	"github.com/mediaharvester/tg-downloader/shared/config"
 	"github.com/mediaharvester/tg-downloader/shared/models"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
 	formatListTimeout = 30 * time.Second
+	formatCacheTTL    = 10 * time.Minute
 )
 
 type formatService struct {
 	proxyAddr string
+	mu        sync.Mutex
+	cache     map[string]cachedFormats
+	redis     *redis.Client
+}
+
+type cachedFormats struct {
+	formats  []models.VideoFormat
+	expiresAt time.Time
 }
 
 // NewFormatService creates a new format service
-func NewFormatService(proxyAddr string) domain.FormatService {
+func NewFormatService(proxyAddr string, redisClient ...*redis.Client) domain.FormatService {
+	var cacheRedis *redis.Client
+	if len(redisClient) > 0 {
+		cacheRedis = redisClient[0]
+	}
 	return &formatService{
 		proxyAddr: proxyAddr,
+		cache:     make(map[string]cachedFormats),
+		redis:     cacheRedis,
 	}
 }
 
 // ListFormats retrieves available formats for a video URL
 func (s *formatService) ListFormats(ctx context.Context, url string, source models.VideoSource) ([]models.VideoFormat, error) {
+	cacheKey := string(source) + ":" + strings.TrimSpace(url)
+	redisKey := formatCacheKey(cacheKey)
+	if s.redis != nil {
+		if data, err := s.redis.Get(ctx, redisKey).Bytes(); err == nil {
+			var formats []models.VideoFormat
+			if json.Unmarshal(data, &formats) == nil {
+				return formats, nil
+			}
+		}
+	}
+	s.mu.Lock()
+	if cached, ok := s.cache[cacheKey]; ok && time.Now().Before(cached.expiresAt) {
+		formats := append([]models.VideoFormat(nil), cached.formats...)
+		s.mu.Unlock()
+		return formats, nil
+	}
+	s.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(ctx, formatListTimeout)
 	defer cancel()
 
 	// Build yt-dlp command with --list-formats
 	args := []string{
-		"--list-formats",
 		"--no-playlist",
-		"--dump-json",
+		"--skip-download",
+		"--dump-single-json",
+		"--no-warnings",
 		url,
 	}
 
@@ -62,7 +99,27 @@ func (s *formatService) ListFormats(ctx context.Context, url string, source mode
 		return nil, fmt.Errorf("yt-dlp list-formats failed: %w, output: %s", err, string(output))
 	}
 
-	return s.parseFormatList(string(output))
+	formats, err := s.parseFormatList(string(output))
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	if s.cache == nil {
+		s.cache = make(map[string]cachedFormats)
+	}
+	s.cache[cacheKey] = cachedFormats{formats: append([]models.VideoFormat(nil), formats...), expiresAt: time.Now().Add(formatCacheTTL)}
+	s.mu.Unlock()
+	if s.redis != nil {
+		if data, err := json.Marshal(formats); err == nil {
+			_ = s.redis.Set(ctx, redisKey, data, formatCacheTTL).Err()
+		}
+	}
+	return formats, nil
+}
+
+func formatCacheKey(value string) string {
+	digest := sha256.Sum256([]byte(value))
+	return fmt.Sprintf("mediaharvester:formats:%x", digest[:])
 }
 
 // parseFormatList parses yt-dlp output to extract format information

@@ -17,6 +17,7 @@
             <nav class="mt-8">
                 <a href="/dashboard" class="block py-3 px-4 {{ if eq .current_page "dashboard" }}bg-gray-700{{ end }} hover:bg-gray-700 transition">📊 Dashboard</a>
                 <a href="/users" class="block py-3 px-4 {{ if eq .current_page "users" }}bg-gray-700{{ end }} hover:bg-gray-700 transition">👥 Users</a>
+                <a href="/jobs" class="block py-3 px-4 {{ if eq .current_page "jobs" }}bg-gray-700{{ end }} hover:bg-gray-700 transition">🧰 Jobs</a>
                 <a href="/settings" class="block py-3 px-4 {{ if eq .current_page "settings" }}bg-gray-700{{ end }} hover:bg-gray-700 transition">⚙️ Settings</a>
                 <a href="/stats" class="block py-3 px-4 {{ if eq .current_page "stats" }}bg-gray-700{{ end }} hover:bg-gray-700 transition">📈 Statistics</a>
                 <form action="/logout" method="POST" class="mt-8">
